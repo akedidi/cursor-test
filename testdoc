@@ -1,4 +1,9 @@
-python - <<EOF
+import inspect
+import lxml, lxml.etree
 from docx import Document
-print("python-docx OK ✔")
-EOF
+
+print("lxml chargé depuis :", inspect.getfile(lxml))
+print("etree chargé depuis :", inspect.getfile(lxml.etree))
+
+doc = Document()
+print("Document() OK :", doc)
