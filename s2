@@ -6,15 +6,10 @@ import re
 import logging
 from collections import defaultdict
 from datetime import datetime
+from zipfile import ZipFile
 
 from dotenv import load_dotenv
 import xlsxwriter
-
-from docx import Document
-from docx.oxml import OxmlElement
-from docx.table import Table
-from docx.shared import Pt
-from docx.oxml.ns import qn
 
 
 # --------------------------------------------------------
@@ -177,6 +172,19 @@ def compute_execution_range_string(rows):
 
     fmt = "%d/%m/%y %I:%M %p"  # 21/11/25 09:42 PM
     return f"{start_dt.strftime(fmt)} - {end_dt.strftime(fmt)}"
+
+
+# XML escape simple
+def xml_escape(text: str) -> str:
+    if text is None:
+        return ""
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 # --------------------------------------------------------
@@ -406,116 +414,13 @@ def write_excel(output_file: str,
 
 
 # --------------------------------------------------------
-# Word helpers
+# Word helpers (sans python-docx / lxml)
 # --------------------------------------------------------
-def insert_table_after_paragraph(paragraph, rows, cols):
+def build_response_time_table_xml(recap):
     """
-    Insère un tableau juste après un paragraphe.
-    Retourne l'objet Table python-docx.
+    Construit le XML Word d'un tableau 'Response time' avec bordures
+    et police réduite (~8pt).
     """
-    # Créer le noeud <w:tbl> juste après le paragraphe
-    tbl = OxmlElement('w:tbl')
-    paragraph._p.addnext(tbl)
-
-    # Propriétés du tableau (bordures)
-    tbl_pr = OxmlElement('w:tblPr')
-    tbl.append(tbl_pr)
-
-    tbl_borders = OxmlElement('w:tblBorders')
-    for border_name in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
-        border = OxmlElement(f'w:{border_name}')
-        border.set(qn('w:val'), 'single')
-        border.set(qn('w:sz'), '4')       # épaisseur
-        border.set(qn('w:space'), '0')
-        border.set(qn('w:color'), '000000')
-        tbl_borders.append(border)
-    tbl_pr.append(tbl_borders)
-
-    # Créer les lignes/colonnes (structure vide)
-    for _ in range(rows):
-        tr = OxmlElement('w:tr')
-        tbl.append(tr)
-        for _ in range(cols):
-            tc = OxmlElement('w:tc')
-            tr.append(tc)
-            p = OxmlElement('w:p')
-            tc.append(p)
-
-    # Construire l'objet Table
-    table = Table(tbl, paragraph._parent)
-
-    # Appliquer le style "Table Grid" si dispo (bordures complètes)
-    try:
-        table.style = 'Table Grid'
-    except Exception:
-        # Si le style n'existe pas dans le modèle, on garde les bordures définies à la main
-        pass
-
-    return table
-
-
-def style_response_time_table(table, font_size_pt=8):
-    """
-    Applique un style commun à un tableau de 'Response time' :
-      - entêtes en gras
-      - police réduite pour tout le tableau
-    """
-    for row_idx, row in enumerate(table.rows):
-        for cell in row.cells:
-            for paragraph in cell.paragraphs:
-                for run in paragraph.runs:
-                    run.font.size = Pt(font_size_pt)
-                    if row_idx == 0:   # première ligne = entête
-                        run.bold = True
-
-
-def generate_word_report(template_path, output_path,
-                         scenarios_users, scenario_recaps, scenario_rows):
-    """
-    Modifie le template Word :
-      - remplit les dates d'exécution dans les tableaux "Execution date"
-      - insère un tableau Response time sous chaque titre "Response time"
-    """
-    if not template_path:
-        logging.warning("DOC_TEMPLATE non défini, génération Word ignorée.")
-        return
-
-    if not os.path.isfile(template_path):
-        logging.error("DOC_TEMPLATE n'existe pas : %s", template_path)
-        return
-
-    logging.info("Ouverture du template Word : %s", template_path)
-    doc = Document(template_path)
-
-    # 1) Remplir les dates d'exécution dans les lignes "Execution date"
-    exec_strings = []
-    for users in sorted(scenarios_users):
-        rows = scenario_rows.get(users, [])
-        exec_strings.append(compute_execution_range_string(rows))
-
-    exec_cells = []
-    for table in doc.tables:
-        for row in table.rows:
-            if row.cells and row.cells[0].text.strip().lower().startswith("execution date"):
-                exec_cells.append(row.cells[1])
-
-    logging.info("Nombre de cellules 'Execution date' trouvées dans le document : %d", len(exec_cells))
-
-    for i, cell in enumerate(exec_cells):
-        if i < len(exec_strings):
-            cell.text = exec_strings[i]
-
-    logging.info("Dates d'exécution mises à jour pour %d scénarios.", len(exec_strings))
-
-    # 2) Insérer les tableaux Response time sous chaque titre "Response time"
-    rt_paragraphs = []
-    for p in doc.paragraphs:
-        txt = p.text.strip()
-        tl = txt.lower()
-        # on évite les lignes de table des matières (qui contiennent un numéro de page ou des points de suite)
-        if tl.startswith("response time") and not any(ch.isdigit() for ch in txt) and "..." not in txt:
-            rt_paragraphs.append(p)
-
     headers = [
         "Label",
         "Samples",
@@ -529,43 +434,146 @@ def generate_word_report(template_path, output_path,
         "Error %",
     ]
 
-    for idx, users in enumerate(sorted(scenarios_users)):
-        if idx >= len(rt_paragraphs):
-            break
+    # Entête (gras, petite taille)
+    header_row_xml = "<w:tr>"
+    for h in headers:
+        header_row_xml += f"""
+        <w:tc>
+          <w:tcPr/>
+          <w:p>
+            <w:r>
+              <w:rPr>
+                <w:b/>
+                <w:sz w:val="16"/>   <!-- 8pt -->
+                <w:szCs w:val="16"/>
+              </w:rPr>
+              <w:t>{xml_escape(h)}</w:t>
+            </w:r>
+          </w:p>
+        </w:tc>
+        """
+    header_row_xml += "</w:tr>"
 
-        para = rt_paragraphs[idx]
+    # Lignes de données
+    data_rows_xml = ""
+    for r in recap:
+        data_rows_xml += "<w:tr>"
+
+        cells = [
+            r["Label"],
+            r["Samples"],
+            r["Average (ms)"],
+            r["Min (ms)"],
+            r["Max (ms)"],
+            r["Std Dev (ms)"],
+            r["90% Line (ms)"],
+            r["95% Line (ms)"],
+            r["99% Line (ms)"],
+            r["Error %"],
+        ]
+
+        for val in cells:
+            text = xml_escape(val)
+            data_rows_xml += f"""
+            <w:tc>
+              <w:tcPr/>
+              <w:p>
+                <w:r>
+                  <w:rPr>
+                    <w:sz w:val="16"/>
+                    <w:szCs w:val="16"/>
+                  </w:rPr>
+                  <w:t>{text}</w:t>
+                </w:r>
+              </w:p>
+            </w:tc>
+            """
+
+        data_rows_xml += "</w:tr>"
+
+    table_xml = f"""
+    <w:tbl>
+      <w:tblPr>
+        <w:tblBorders>
+          <w:top w:val="single" w:sz="8" w:space="0" w:color="000000"/>
+          <w:left w:val="single" w:sz="8" w:space="0" w:color="000000"/>
+          <w:bottom w:val="single" w:sz="8" w:space="0" w:color="000000"/>
+          <w:right w:val="single" w:sz="8" w:space="0" w:color="000000"/>
+          <w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+          <w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>
+        </w:tblBorders>
+      </w:tblPr>
+      {header_row_xml}
+      {data_rows_xml}
+    </w:tbl>
+    """
+    return table_xml
+
+
+def generate_word_report(template_path, output_path,
+                         scenarios_users, scenario_recaps, scenario_rows):
+    """
+    Modifie le template Word (DOCX comme ZIP) :
+      - remplit les dates d'exécution : {EXEC_DATE_1}, {EXEC_DATE_2}, ...
+      - insère les tableaux Response time : {RT_TABLE_1}, {RT_TABLE_2}, ...
+    """
+    if not template_path:
+        logging.warning("DOC_TEMPLATE non défini, génération Word ignorée.")
+        return
+
+    if not os.path.isfile(template_path):
+        logging.error("DOC_TEMPLATE n'existe pas : %s", template_path)
+        return
+
+    logging.info("Ouverture du template Word (ZIP) : %s", template_path)
+
+    # Lire tout le DOCX dans un dict {nom_fichier: bytes}
+    with ZipFile(template_path, "r") as z:
+        content = {name: z.read(name) for name in z.namelist()}
+
+    if "word/document.xml" not in content:
+        logging.error("Le fichier word/document.xml est introuvable dans le template.")
+        return
+
+    xml = content["word/document.xml"].decode("utf-8")
+
+    # 1) Dates d'exécution
+    exec_strings = []
+    for users in sorted(scenarios_users):
+        rows = scenario_rows.get(users, [])
+        exec_strings.append(compute_execution_range_string(rows))
+
+    for i, date_str in enumerate(exec_strings, start=1):
+        placeholder = f"{{EXEC_DATE_{i}}}"
+        if placeholder in xml:
+            xml = xml.replace(placeholder, xml_escape(date_str))
+            logging.info("Remplacement de %s par '%s'", placeholder, date_str)
+        else:
+            logging.info("Placeholder %s non trouvé dans le document.", placeholder)
+
+    # 2) Tableaux Response time
+    for idx, users in enumerate(sorted(scenarios_users), start=1):
         recap = scenario_recaps.get(users)
         if not recap:
             continue
 
-        logging.info("Insertion du tableau Response time pour le scénario %d users", users)
+        placeholder = f"{{RT_TABLE_{idx}}}"
+        table_xml = build_response_time_table_xml(recap)
 
-        # création du tableau : 1 ligne d'entête + len(recap) lignes de données
-        table = insert_table_after_paragraph(para, rows=len(recap) + 1, cols=len(headers))
+        if placeholder in xml:
+            xml = xml.replace(placeholder, table_xml)
+            logging.info("Tableau Response time inséré à la place de %s (users=%d)", placeholder, users)
+        else:
+            logging.info("Placeholder %s non trouvé pour users=%d", placeholder, users)
 
-        # remplir en-têtes
-        for col, h in enumerate(headers):
-            cell = table.rows[0].cells[col]
-            cell.text = h
+    # Écrire le nouveau DOCX
+    with ZipFile(output_path, "w") as z:
+        for name, data in content.items():
+            if name == "word/document.xml":
+                z.writestr(name, xml.encode("utf-8"))
+            else:
+                z.writestr(name, data)
 
-        # remplir données
-        for r_idx, r in enumerate(recap, start=1):
-            cells = table.rows[r_idx].cells
-            cells[0].text = r["Label"]
-            cells[1].text = str(r["Samples"])
-            cells[2].text = str(r["Average (ms)"])
-            cells[3].text = str(r["Min (ms)"])
-            cells[4].text = str(r["Max (ms)"])
-            cells[5].text = str(r["Std Dev (ms)"])
-            cells[6].text = str(r["90% Line (ms)"])
-            cells[7].text = str(r["95% Line (ms)"])
-            cells[8].text = str(r["99% Line (ms)"])
-            cells[9].text = str(r["Error %"])
-
-        # appliquer police réduite + entêtes en gras
-        style_response_time_table(table, font_size_pt=8)
-
-    doc.save(output_path)
     logging.info("Document Word généré : %s", output_path)
 
 
