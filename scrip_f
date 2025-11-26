@@ -1,0 +1,146 @@
+import os
+import re
+import pandas as pd
+from datetime import datetime
+from dotenv import load_dotenv
+from openpyxl import Workbook
+from docx import Document
+from docx.shared import Pt
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+#############################################
+# 🔹 LOAD CONFIG (.env)
+#############################################
+load_dotenv()
+RESULTS_FOLDER = os.getenv("RESULTS_FOLDER")
+OUTPUT_FILE = os.getenv("OUTPUT_FILE")
+DOC_TEMPLATE = os.getenv("DOC_TEMPLATE")
+DOC_OUTPUT = os.getenv("DOC_OUTPUT")
+
+if not all([RESULTS_FOLDER, OUTPUT_FILE, DOC_TEMPLATE, DOC_OUTPUT]):
+    raise ValueError("❗ REQUIRED in .env : RESULTS_FOLDER, OUTPUT_FILE, DOC_TEMPLATE, DOC_OUTPUT")
+
+#############################################
+# 🔹 STEP 1 – PARSE JMETER CSV
+#############################################
+def load_jmeter_data():
+    csv_files = sorted([f for f in os.listdir(RESULTS_FOLDER) if f.endswith(".csv")])
+    
+    scenario_results = []
+    execution_dates = []
+
+    for file in csv_files:
+        df = pd.read_csv(os.path.join(RESULTS_FOLDER, file))
+
+        # Extract execution timestamp automatically
+        ts = pd.to_datetime(df["timeStamp"].iloc[0], unit="ms")
+        execution_dates.append(ts.strftime("%d/%m/%Y %I:%M %p"))   # (AM/PM)
+
+        # KPI TABLE
+        kpi = df.groupby("label").agg(
+            Samples=("elapsed","count"),
+            Average=("elapsed","mean"),
+            Min=("elapsed","min"),
+            Max=("elapsed","max"),
+            Std=("elapsed","std"),
+            P90=("elapsed",lambda x:x.quantile(.90)),
+            P95=("elapsed",lambda x:x.quantile(.95)),
+            P99=("elapsed",lambda x:x.quantile(.99)),
+            ErrRate=("success",lambda x:100*(1-x.mean()))
+        ).reset_index()
+
+        # formatting
+        for col in ["Average","Min","Max","Std","P90","P95","P99"]:
+            kpi[col]=kpi[col].astype(int)
+        kpi["ErrRate"]=kpi["ErrRate"].round(2)
+
+        scenario_results.append(kpi)
+
+    return scenario_results, execution_dates
+
+
+#############################################
+# 🔹 STEP 2 – EXCEL BUILDER FULL
+#############################################
+def write_excel(scenarios):
+    wb = Workbook()
+    ws = wb.active
+    ws.title="SUMMARY"
+
+    # Create 1 sheet per scenario
+    for i,df in enumerate(scenarios,start=1):
+        ws = wb.create_sheet(f"Scenario-{i}-users")
+        ws.append(list(df.columns))
+        for row in df.values.tolist(): ws.append(row)
+
+        # bold header
+        for cell in ws[1]:
+            cell.font = cell.font.copy(bold=True)
+
+    wb.save(OUTPUT_FILE)
+    print("📁 Excel generated →",OUTPUT_FILE)
+
+
+#############################################
+# 🔹 WORD TABLE FORMATTER
+#############################################
+def format_border(table):
+    tblPr=table._tbl.get_or_add_tblPr()
+    borders=OxmlElement("w:tblBorders")
+    for line in ["top","left","bottom","right","insideH","insideV"]:
+        l=OxmlElement(f"w:{line}")
+        l.set(qn("w:val"),"single")
+        l.set(qn("w:sz"),"6")
+        borders.append(l)
+    tblPr.append(borders)
+
+def insert_table(after_paragraph,df):
+    table=after_paragraph.insert_table_after(rows=df.shape[0]+1, cols=len(df.columns))
+
+    # header
+    for j,c in enumerate(df.columns):
+        run=table.rows[0].cells[j].paragraphs[0].add_run(c)
+        run.bold=True; run.font.name="Times New Roman"; run.font.size=Pt(9)
+
+    # rows
+    for i in range(df.shape[0]):
+        for j in range(df.shape[1]):
+            run=table.rows[i+1].cells[j].paragraphs[0].add_run(str(df.iloc[i,j]))
+            run.font.name="Times New Roman"; run.font.size=Pt(9)
+
+    format_border(table)
+
+
+#############################################
+# 🔹 STEP 3 – GENERATE WORD REPORT
+#############################################
+def generate_word_report(scenarios,dates):
+
+    doc=Document(DOC_TEMPLATE)
+    scenario_index=0
+
+    for para in doc.paragraphs:
+
+        # Fill execution date inside existing empty cell
+        if "Execution date" in para.text and scenario_index<len(dates):
+            tbl=para._element.getparent().getparent()
+            tbl.cells[1].text = dates[scenario_index]
+        
+        # Place table BELOW Response time body, not summary
+        if para.text.strip()=="Response time":
+            insert_table(para,scenarios[scenario_index])
+            scenario_index+=1
+
+    doc.save(DOC_OUTPUT)
+    print("📄 Word generated →",DOC_OUTPUT)
+
+
+#############################################
+# 🚀 RUN FULL PIPELINE
+#############################################
+if __name__=="__main__":
+    data,dates = load_jmeter_data()
+    write_excel(data)
+    generate_word_report(data,dates)
+    print("\n🎉 FULL PROCESS COMPLETE — Excel + Word OK")
