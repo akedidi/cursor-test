@@ -18,8 +18,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
-
-# Ordre des labels qu'on veut dans les onglets de synthèse
+# Ordre des labels qu'on veut dans les synthèses
 LABEL_ORDER = [
     "Genera Token",   # Token
     "Purchase",
@@ -46,7 +45,7 @@ def load_env():
     if not os.path.isdir(results_folder):
         raise ValueError(f"Le dossier RESULTS_FOLDER n'existe pas : {results_folder}")
 
-    # si OUTPUT_FILE est juste un dossier, on ajoute un nom de fichier
+    # si OUTPUT_FILE est un dossier ou sans extension -> on ajoute un nom
     if os.path.isdir(output_file) or not os.path.splitext(output_file)[1]:
         output_file = os.path.join(output_file, "recap_scenarios.xlsx")
         logging.info("OUTPUT_FILE normalisé en : %s", output_file)
@@ -260,7 +259,7 @@ def write_excel(output_file: str,
     cell_fmt = workbook.add_format({"border": 1})
     num_fmt = workbook.add_format({"border": 1, "num_format": "0.00"})
 
-    # --- Feuilles par scénario (comme avant) ---
+    # --- Feuilles par scénario (détail) ---
     for sheet_name_raw, rows in scenarios_data.items():
         sheet_name = sanitize_sheet_name(sheet_name_raw)
         logging.info("  -> Création de la feuille : %s", sheet_name)
@@ -298,41 +297,47 @@ def write_excel(output_file: str,
         ws.set_column(0, 0, 40)
         ws.set_column(1, len(headers) - 1, 16)
 
-    # --- Onglet Data Time Response Time ---
+    # --- Onglet Data Time Response Time (format long : Scenario / API / Response Time) ---
     ws_rt = workbook.add_worksheet("Data Time Response Time")
-    ws_rt.write(0, 0, "API", header_fmt)
-    for col, users in enumerate(scenarios_users, start=1):
-        ws_rt.write(0, col, str(users), header_fmt)
+    ws_rt.write(0, 0, "Scenario", header_fmt)
+    ws_rt.write(0, 1, "API", header_fmt)
+    ws_rt.write(0, 2, "Response Time (ms)", header_fmt)
 
-    for row_idx, label in enumerate(LABEL_ORDER, start=1):
-        ws_rt.write(row_idx, 0, label, header_fmt)
-        for col_idx, users in enumerate(scenarios_users, start=1):
-            val = rt_matrix.get(label, {}).get(users, "")
-            if isinstance(val, (int, float)):
-                ws_rt.write(row_idx, col_idx, val, num_fmt)
-            else:
-                ws_rt.write(row_idx, col_idx, val, cell_fmt)
+    row_idx = 1
+    for users in sorted(scenarios_users):
+        for label in LABEL_ORDER:
+            val = rt_matrix.get(label, {}).get(users, None)
+            if val is None:
+                continue  # si jamais ce couple n'existe pas
+            ws_rt.write(row_idx, 0, users, num_fmt)
+            ws_rt.write(row_idx, 1, label, cell_fmt)
+            ws_rt.write(row_idx, 2, val, num_fmt)
+            row_idx += 1
 
-    ws_rt.set_column(0, 0, 20)
-    ws_rt.set_column(1, len(scenarios_users), 16)
+    ws_rt.set_column(0, 0, 12)   # Scenario
+    ws_rt.set_column(1, 1, 20)   # API
+    ws_rt.set_column(2, 2, 20)   # Response Time
 
-    # --- Onglet Data Error Rate ---
+    # --- Onglet Data Error Rate (format long : Scenario / API / Error Rate) ---
     ws_err = workbook.add_worksheet("Data Error Rate")
-    ws_err.write(0, 0, "API", header_fmt)
-    for col, users in enumerate(scenarios_users, start=1):
-        ws_err.write(0, col, str(users), header_fmt)
+    ws_err.write(0, 0, "Scenario", header_fmt)
+    ws_err.write(0, 1, "API", header_fmt)
+    ws_err.write(0, 2, "Error Rate (%)", header_fmt)
 
-    for row_idx, label in enumerate(LABEL_ORDER, start=1):
-        ws_err.write(row_idx, 0, label, header_fmt)
-        for col_idx, users in enumerate(scenarios_users, start=1):
-            val = err_matrix.get(label, {}).get(users, "")
-            if isinstance(val, (int, float)):
-                ws_err.write(row_idx, col_idx, val, num_fmt)
-            else:
-                ws_err.write(row_idx, col_idx, val, cell_fmt)
+    row_idx = 1
+    for users in sorted(scenarios_users):
+        for label in LABEL_ORDER:
+            val = err_matrix.get(label, {}).get(users, None)
+            if val is None:
+                continue
+            ws_err.write(row_idx, 0, users, num_fmt)
+            ws_err.write(row_idx, 1, label, cell_fmt)
+            ws_err.write(row_idx, 2, val, num_fmt)
+            row_idx += 1
 
-    ws_err.set_column(0, 0, 20)
-    ws_err.set_column(1, len(scenarios_users), 16)
+    ws_err.set_column(0, 0, 12)
+    ws_err.set_column(1, 1, 20)
+    ws_err.set_column(2, 2, 20)
 
     workbook.close()
     logging.info("Fichier Excel finalisé.")
