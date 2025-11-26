@@ -141,7 +141,7 @@ def percentile(values, p):
 
 
 # --------------------------------------------------------
-# Calcul du recap
+# Calcul du recap par scénario
 # --------------------------------------------------------
 def compute_recap(rows):
     logging.info("Calcul du tableau récapitulatif pour le scénario...")
@@ -255,9 +255,14 @@ def write_excel(output_file: str,
     logging.info("Création du fichier Excel : %s", output_file)
     workbook = xlsxwriter.Workbook(output_file)
 
-    header_fmt = workbook.add_format({"bold": True, "bg_color": "#D9D9D9", "border": 1})
+    header_fmt = workbook.add_format({
+        "bold": True,
+        "bg_color": "#D9D9D9",
+        "border": 1
+    })
     cell_fmt = workbook.add_format({"border": 1})
     num_fmt = workbook.add_format({"border": 1, "num_format": "0.00"})
+    int_fmt = workbook.add_format({"border": 1, "num_format": "0"})  # entier
 
     # --- Feuilles par scénario (détail) ---
     for sheet_name_raw, rows in scenarios_data.items():
@@ -297,7 +302,7 @@ def write_excel(output_file: str,
         ws.set_column(0, 0, 40)
         ws.set_column(1, len(headers) - 1, 16)
 
-    # --- Onglet Data Time Response Time (format long : Scenario / API / Response Time) ---
+    # --- Onglet Data Time Response Time (Scenario / API / Response Time) ---
     ws_rt = workbook.add_worksheet("Data Time Response Time")
     ws_rt.write(0, 0, "Scenario", header_fmt)
     ws_rt.write(0, 1, "API", header_fmt)
@@ -305,20 +310,26 @@ def write_excel(output_file: str,
 
     row_idx = 1
     for users in sorted(scenarios_users):
+        start_row = row_idx
         for label in LABEL_ORDER:
             val = rt_matrix.get(label, {}).get(users, None)
             if val is None:
-                continue  # si jamais ce couple n'existe pas
-            ws_rt.write(row_idx, 0, users, num_fmt)
+                continue
+            # API
             ws_rt.write(row_idx, 1, label, cell_fmt)
-            ws_rt.write(row_idx, 2, val, num_fmt)
+            # Response time entier
+            ws_rt.write(row_idx, 2, int(round(val)), int_fmt)
             row_idx += 1
+        end_row = row_idx - 1
+        if end_row >= start_row:
+            # fusion de la colonne Scenario pour ce bloc
+            ws_rt.merge_range(start_row, 0, end_row, 0, users, int_fmt)
 
     ws_rt.set_column(0, 0, 12)   # Scenario
     ws_rt.set_column(1, 1, 20)   # API
     ws_rt.set_column(2, 2, 20)   # Response Time
 
-    # --- Onglet Data Error Rate (format long : Scenario / API / Error Rate) ---
+    # --- Onglet Data Error Rate (Scenario / API / Error Rate) ---
     ws_err = workbook.add_worksheet("Data Error Rate")
     ws_err.write(0, 0, "Scenario", header_fmt)
     ws_err.write(0, 1, "API", header_fmt)
@@ -326,14 +337,26 @@ def write_excel(output_file: str,
 
     row_idx = 1
     for users in sorted(scenarios_users):
+        start_row = row_idx
         for label in LABEL_ORDER:
             val = err_matrix.get(label, {}).get(users, None)
             if val is None:
                 continue
-            ws_err.write(row_idx, 0, users, num_fmt)
             ws_err.write(row_idx, 1, label, cell_fmt)
-            ws_err.write(row_idx, 2, val, num_fmt)
+
+            # formattage ErrorRate :
+            # - entier si possible
+            # - sinon 2 décimales avec un point (écrit comme texte)
+            if abs(val - round(val)) < 1e-9:
+                s = str(int(round(val)))
+            else:
+                s = f"{val:.2f}"  # Python utilise déjà le point comme séparateur
+            ws_err.write(row_idx, 2, s, cell_fmt)
+
             row_idx += 1
+        end_row = row_idx - 1
+        if end_row >= start_row:
+            ws_err.merge_range(start_row, 0, end_row, 0, users, int_fmt)
 
     ws_err.set_column(0, 0, 12)
     ws_err.set_column(1, 1, 20)
