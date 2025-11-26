@@ -5,9 +5,14 @@ import statistics
 import re
 import logging
 from collections import defaultdict
+from datetime import datetime
 
 from dotenv import load_dotenv
 import xlsxwriter
+
+from docx import Document
+from docx.oxml import OxmlElement
+from docx.table import Table
 
 
 # --------------------------------------------------------
@@ -36,9 +41,13 @@ def load_env():
 
     results_folder = os.getenv("RESULTS_FOLDER")
     output_file = os.getenv("OUTPUT_FILE", "recap_scenarios.xlsx")
+    doc_template = os.getenv("DOC_TEMPLATE")
+    doc_output = os.getenv("DOC_OUTPUT")
 
     logging.info("RESULTS_FOLDER = %s", results_folder)
     logging.info("OUTPUT_FILE   = %s", output_file)
+    logging.info("DOC_TEMPLATE  = %s", doc_template)
+    logging.info("DOC_OUTPUT    = %s", doc_output)
 
     if not results_folder:
         raise ValueError("La variable RESULTS_FOLDER n'est pas définie dans le fichier .env")
@@ -50,7 +59,7 @@ def load_env():
         output_file = os.path.join(output_file, "recap_scenarios.xlsx")
         logging.info("OUTPUT_FILE normalisé en : %s", output_file)
 
-    return results_folder, output_file
+    return results_folder, output_file, doc_template, doc_output
 
 
 # --------------------------------------------------------
@@ -138,6 +147,34 @@ def percentile(values, p):
     d0 = values[f] * (c - k)
     d1 = values[c] * (k - f)
     return d0 + d1
+
+
+def compute_execution_range_string(rows):
+    """
+    Calcule la date/heure de début et fin du scénario à partir des timeStamp JMeter.
+    Format : 21/11/25 09:42 PM - 21/11/25 10:00 PM
+    """
+    timestamps = []
+    for r in rows:
+        ts = r.get("timeStamp")
+        if ts is None:
+            continue
+        try:
+            timestamps.append(int(ts))
+        except ValueError:
+            continue
+
+    if not timestamps:
+        return ""
+
+    start_ts = min(timestamps) / 1000.0
+    end_ts = max(timestamps) / 1000.0
+
+    start_dt = datetime.fromtimestamp(start_ts)
+    end_dt = datetime.fromtimestamp(end_ts)
+
+    fmt = "%d/%m/%y %I:%M %p"  # 21/11/25 09:42 PM
+    return f"{start_dt.strftime(fmt)} - {end_dt.strftime(fmt)}"
 
 
 # --------------------------------------------------------
@@ -367,17 +404,130 @@ def write_excel(output_file: str,
 
 
 # --------------------------------------------------------
+# Word helpers
+# --------------------------------------------------------
+def insert_table_after_paragraph(paragraph, rows, cols):
+    """
+    Insère un tableau juste après un paragraphe.
+    Retourne l'objet Table python-docx.
+    """
+    tbl = OxmlElement('w:tbl')
+    paragraph._p.addnext(tbl)
+    table = Table(tbl, paragraph._parent)
+
+    # créer les lignes/colonnes
+    for _ in range(rows):
+        tr = OxmlElement('w:tr')
+        tbl.append(tr)
+        for _ in range(cols):
+            tc = OxmlElement('w:tc')
+            tr.append(tc)
+            p = OxmlElement('w:p')
+            tc.append(p)
+
+    return table
+
+
+def generate_word_report(template_path, output_path,
+                         scenarios_users, scenario_recaps, scenario_rows):
+    """
+    Modifie le template Word :
+      - remplit les dates d'exécution dans les tableaux "Execution date"
+      - insère un tableau Response time sous chaque titre "Response time"
+    """
+    if not template_path:
+        logging.warning("DOC_TEMPLATE non défini, génération Word ignorée.")
+        return
+
+    if not os.path.isfile(template_path):
+        logging.error("DOC_TEMPLATE n'existe pas : %s", template_path)
+        return
+
+    logging.info("Ouverture du template Word : %s", template_path)
+    doc = Document(template_path)
+
+    # 1) Remplir les dates d'exécution dans les lignes "Execution date"
+    exec_strings = []
+    for users in sorted(scenarios_users):
+        rows = scenario_rows.get(users, [])
+        exec_strings.append(compute_execution_range_string(rows))
+
+    exec_cells = []
+    for table in doc.tables:
+        for row in table.rows:
+            if row.cells and row.cells[0].text.strip().lower().startswith("execution date"):
+                exec_cells.append(row.cells[1])
+
+    for i, cell in enumerate(exec_cells):
+        if i < len(exec_strings):
+            cell.text = exec_strings[i]
+
+    logging.info("Dates d'exécution mises à jour pour %d scénarios.", len(exec_strings))
+
+    # 2) Insérer les tableaux Response time sous chaque titre "Response time"
+    rt_paragraphs = [p for p in doc.paragraphs
+                     if p.text.strip().lower().startswith("response time")]
+
+    headers = [
+        "Label",
+        "Samples",
+        "Average (ms)",
+        "Min (ms)",
+        "Max (ms)",
+        "Std Dev (ms)",
+        "90% Line (ms)",
+        "95% Line (ms)",
+        "99% Line (ms)",
+        "Error %",
+    ]
+
+    for idx, users in enumerate(sorted(scenarios_users)):
+        if idx >= len(rt_paragraphs):
+            break
+        para = rt_paragraphs[idx]
+        recap = scenario_recaps.get(users)
+        if not recap:
+            continue
+
+        logging.info("Insertion du tableau Response time pour le scénario %d users", users)
+        table = insert_table_after_paragraph(para, rows=len(recap) + 1, cols=len(headers))
+
+        # remplir en-têtes
+        for col, h in enumerate(headers):
+            table.rows[0].cells[col].text = h
+
+        # remplir données
+        for r_idx, r in enumerate(recap, start=1):
+            cells = table.rows[r_idx].cells
+            cells[0].text = r["Label"]
+            cells[1].text = str(r["Samples"])
+            cells[2].text = str(r["Average (ms)"])
+            cells[3].text = str(r["Min (ms)"])
+            cells[4].text = str(r["Max (ms)"])
+            cells[5].text = str(r["Std Dev (ms)"])
+            cells[6].text = str(r["90% Line (ms)"])
+            cells[7].text = str(r["95% Line (ms)"])
+            cells[8].text = str(r["99% Line (ms)"])
+            cells[9].text = str(r["Error %"])
+
+    doc.save(output_path)
+    logging.info("Document Word généré : %s", output_path)
+
+
+# --------------------------------------------------------
 # MAIN
 # --------------------------------------------------------
 def main():
     try:
-        results_folder, output_file = load_env()
+        results_folder, output_file, doc_template, doc_output = load_env()
         files = find_scenario_files(results_folder)
 
         scenarios_data = {}
         scenarios_users = []
         rt_matrix = defaultdict(dict)   # label -> {users: avg}
         err_matrix = defaultdict(dict)  # label -> {users: error%}
+        scenario_rows = {}              # users -> rows CSV
+        scenario_recaps_by_users = {}   # users -> recap
 
         for f in files:
             logging.info("--------------------------------------------------")
@@ -392,6 +542,8 @@ def main():
 
             base_name = os.path.splitext(os.path.basename(f))[0]
             scenarios_data[base_name] = recap
+            scenario_rows[users] = rows
+            scenario_recaps_by_users[users] = recap
 
             # alimenter les matrices pour les onglets Data*
             for r in recap:
@@ -402,6 +554,14 @@ def main():
                 err_matrix[label][users] = r["Error %"]
 
         write_excel(output_file, scenarios_data, scenarios_users, rt_matrix, err_matrix)
+
+        # Génération du Word si les chemins sont définis
+        if doc_template and doc_output:
+            generate_word_report(doc_template, doc_output,
+                                 scenarios_users, scenario_recaps_by_users, scenario_rows)
+        else:
+            logging.info("DOC_TEMPLATE ou DOC_OUTPUT non défini, Word ignoré.")
+
         logging.info("Terminé ✅")
 
     except Exception as e:
