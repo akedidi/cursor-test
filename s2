@@ -26,7 +26,7 @@ W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 NS = {"w": W_NS}
 ET.register_namespace("w", W_NS)
 
-# Ordre des labels qu'on veut dans les synthèses
+# Ordre des labels qu'on veut (Word + Excel)
 LABEL_ORDER = [
     "Genera Token",   # Token
     "Purchase",
@@ -57,7 +57,6 @@ def load_env():
     if not os.path.isdir(results_folder):
         raise ValueError(f"Le dossier RESULTS_FOLDER n'existe pas : {results_folder}")
 
-    # si OUTPUT_FILE est un dossier ou sans extension -> on ajoute un nom
     if os.path.isdir(output_file) or not os.path.splitext(output_file)[1]:
         output_file = os.path.join(output_file, "recap_scenarios.xlsx")
         logging.info("OUTPUT_FILE normalisé en : %s", output_file)
@@ -70,7 +69,6 @@ def load_env():
 # --------------------------------------------------------
 def extract_users_from_filename(path: str) -> int:
     """
-    Extrait le nombre d'utilisateurs à partir du nom de fichier.
     Ex : ...results-1-users.csv -> 1
          ...results-12-user.csv -> 12
     """
@@ -78,15 +76,10 @@ def extract_users_from_filename(path: str) -> int:
     m = re.search(r"results-(\d+)-user", name)
     if m:
         return int(m.group(1))
-    return 999999  # au cas où
+    return 999999
 
 
 def find_scenario_files(results_folder: str):
-    """
-    On accepte :
-      IDP API-results-1-user.csv
-      IDP API-results-1-users.csv
-    """
     pattern = os.path.join(results_folder, "IDP API-results-*user*.csv")
     logging.info("Recherche des fichiers avec le pattern : %s", pattern)
     files = glob.glob(pattern)
@@ -94,7 +87,6 @@ def find_scenario_files(results_folder: str):
     if not files:
         raise FileNotFoundError(f"Aucun fichier trouvé avec le pattern : {pattern}")
 
-    # Tri par nombre d'utilisateurs : 1,2,4,8,12...
     files = sorted(files, key=extract_users_from_filename)
 
     logging.info("Nombre de fichiers trouvés : %d", len(files))
@@ -128,6 +120,13 @@ def to_float(value, default=None):
         return default
 
 
+def to_int(value, default=0):
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
 def to_bool_success(value):
     if value is None:
         return False
@@ -136,9 +135,6 @@ def to_bool_success(value):
 
 
 def percentile(values, p):
-    """
-    Percentile simple (0-100) sur une liste de nombres
-    """
     if not values:
         return None
     values = sorted(values)
@@ -153,10 +149,6 @@ def percentile(values, p):
 
 
 def compute_execution_range_string(rows):
-    """
-    Calcule la date/heure de début et fin du scénario à partir des timeStamp JMeter.
-    Format : 21/11/25 09:42 PM - 21/11/25 10:00 PM
-    """
     timestamps = []
     for r in rows:
         ts = r.get("timeStamp")
@@ -176,7 +168,7 @@ def compute_execution_range_string(rows):
     start_dt = datetime.fromtimestamp(start_ts)
     end_dt = datetime.fromtimestamp(end_ts)
 
-    fmt = "%d/%m/%y %I:%M %p"  # 21/11/25 09:42 PM
+    fmt = "%d/%m/%y %I:%M %p"
     return f"{start_dt.strftime(fmt)} - {end_dt.strftime(fmt)}"
 
 
@@ -196,6 +188,12 @@ def xml_escape(text: str) -> str:
 # Calcul du recap par scénario
 # --------------------------------------------------------
 def compute_recap(rows):
+    """
+    Retourne une liste de dicts avec uniquement :
+      Label, Samples, Average (ms), Min (ms), Max (ms), Std Dev (ms),
+      Error %, Throughput (/min), Received KB/sec, Sent KB/sec, Avg Bytes
+    (les 90/95/99% sont calculés mais pas stockés, donc pas visibles dans Excel)
+    """
     logging.info("Calcul du tableau récapitulatif pour le scénario...")
     labels = {}
 
@@ -203,30 +201,62 @@ def compute_recap(rows):
         label = r.get("label")
         elapsed_raw = r.get("elapsed")
         success_raw = r.get("success")
+        ts_raw = r.get("timeStamp")
 
-        if label is None or elapsed_raw is None:
+        if label is None or elapsed_raw is None or ts_raw is None:
             continue
 
         elapsed = to_float(elapsed_raw)
         if elapsed is None:
             continue
 
+        ts = to_int(ts_raw)
+        end_ts = ts + int(elapsed)
+
         success = to_bool_success(success_raw)
+        bytes_val = to_int(r.get("bytes", 0))
+        sent_bytes_val = to_int(r.get("sentBytes", 0))
 
         if label not in labels:
-            labels[label] = {"times": [], "errors": 0}
+            labels[label] = {
+                "times": [],
+                "errors": 0,
+                "bytes_sum": 0,
+                "sent_bytes_sum": 0,
+                "first_ts": ts,
+                "last_end_ts": end_ts,
+            }
 
-        labels[label]["times"].append(elapsed)
+        data = labels[label]
+        data["times"].append(elapsed)
         if not success:
-            labels[label]["errors"] += 1
+            data["errors"] += 1
+        data["bytes_sum"] += bytes_val
+        data["sent_bytes_sum"] += sent_bytes_val
+        data["first_ts"] = min(data["first_ts"], ts)
+        data["last_end_ts"] = max(data["last_end_ts"], end_ts)
 
     recap = []
 
     total_samples_all = 0
     all_times = []
     total_errors_all = 0
+    total_bytes_all = 0
+    total_sent_bytes_all = 0
+    global_first_ts = None
+    global_last_end_ts = None
 
-    for label, data in sorted(labels.items(), key=lambda x: x[0]):
+    # ordre des labels pour Word/Excel
+    ordered_labels = []
+    for lbl in LABEL_ORDER:
+        if lbl in labels:
+            ordered_labels.append(lbl)
+    for lbl in sorted(labels.keys()):
+        if lbl not in ordered_labels:
+            ordered_labels.append(lbl)
+
+    for label in ordered_labels:
+        data = labels[label]
         times = data["times"]
         errors = data["errors"]
         samples = len(times)
@@ -237,10 +267,27 @@ def compute_recap(rows):
         mn = min(times)
         mx = max(times)
         std_dev = statistics.pstdev(times) if samples > 1 else 0.0
-        p90 = percentile(times, 90)
-        p95 = percentile(times, 95)
-        p99 = percentile(times, 99)
+        # percentiles calculés mais non stockés
+        _ = percentile(times, 90)
+        _ = percentile(times, 95)
+        _ = percentile(times, 99)
         err_pct = (errors / samples * 100.0) if samples else 0.0
+
+        # métriques JMeter : durée par label
+        duration_ms = max(data["last_end_ts"] - data["first_ts"], 1)
+        duration_sec = duration_ms / 1000.0
+        duration_min = duration_sec / 60.0 if duration_sec > 0 else 0.0
+
+        if duration_min > 0:
+            throughput_per_min = samples / duration_min
+            recv_kb_per_min = (data["bytes_sum"] / 1024.0) / duration_min
+            sent_kb_per_min = (data["sent_bytes_sum"] / 1024.0) / duration_min
+        else:
+            throughput_per_min = 0.0
+            recv_kb_per_min = 0.0
+            sent_kb_per_min = 0.0
+
+        avg_bytes = (data["bytes_sum"] / samples) if samples else 0.0
 
         recap.append({
             "Label": label,
@@ -249,26 +296,52 @@ def compute_recap(rows):
             "Min (ms)": mn,
             "Max (ms)": mx,
             "Std Dev (ms)": round(std_dev, 2),
-            "90% Line (ms)": round(p90, 2) if p90 is not None else "",
-            "95% Line (ms)": round(p95, 2) if p95 is not None else "",
-            "99% Line (ms)": round(p99, 2) if p99 is not None else "",
             "Error %": round(err_pct, 2),
+
+            "Throughput (/min)": f"{throughput_per_min:.1f}/min",
+            "Received KB/sec": round(recv_kb_per_min, 2),
+            "Sent KB/sec": round(sent_kb_per_min, 2),
+            "Avg Bytes": round(avg_bytes, 1),
         })
 
         total_samples_all += samples
         total_errors_all += errors
         all_times.extend(times)
+        total_bytes_all += data["bytes_sum"]
+        total_sent_bytes_all += data["sent_bytes_sum"]
 
-    # Ligne TOTAL
+        if global_first_ts is None or data["first_ts"] < global_first_ts:
+            global_first_ts = data["first_ts"]
+        if global_last_end_ts is None or data["last_end_ts"] > global_last_end_ts:
+            global_last_end_ts = data["last_end_ts"]
+
+    # TOTAL
     if all_times:
         total_avg = statistics.mean(all_times)
         total_min = min(all_times)
         total_max = max(all_times)
         total_std = statistics.pstdev(all_times) if len(all_times) > 1 else 0.0
+        _ = percentile(all_times, 90)
+        _ = percentile(all_times, 95)
+        _ = percentile(all_times, 99)
         total_err_pct = (total_errors_all / total_samples_all * 100.0) if total_samples_all else 0.0
-        p90 = percentile(all_times, 90)
-        p95 = percentile(all_times, 95)
-        p99 = percentile(all_times, 99)
+
+        if global_first_ts is not None and global_last_end_ts is not None:
+            duration_ms_all = max(global_last_end_ts - global_first_ts, 1)
+            duration_min_all = duration_ms_all / 1000.0 / 60.0
+        else:
+            duration_min_all = 0.0
+
+        if duration_min_all > 0:
+            throughput_all = total_samples_all / duration_min_all
+            recv_kb_all = (total_bytes_all / 1024.0) / duration_min_all
+            sent_kb_all = (total_sent_bytes_all / 1024.0) / duration_min_all
+        else:
+            throughput_all = 0.0
+            recv_kb_all = 0.0
+            sent_kb_all = 0.0
+
+        avg_bytes_all = (total_bytes_all / total_samples_all) if total_samples_all else 0.0
 
         recap.append({
             "Label": "TOTAL",
@@ -277,10 +350,12 @@ def compute_recap(rows):
             "Min (ms)": total_min,
             "Max (ms)": total_max,
             "Std Dev (ms)": round(total_std, 2),
-            "90% Line (ms)": round(p90, 2) if p90 is not None else "",
-            "95% Line (ms)": round(p95, 2) if p95 is not None else "",
-            "99% Line (ms)": round(p99, 2) if p99 is not None else "",
             "Error %": round(total_err_pct, 2),
+
+            "Throughput (/min)": f"{throughput_all:.1f}/min",
+            "Received KB/sec": round(recv_kb_all, 2),
+            "Sent KB/sec": round(sent_kb_all, 2),
+            "Avg Bytes": round(avg_bytes_all, 1),
         })
 
     logging.info("  -> %d lignes dans le tableau récap (y compris TOTAL)", len(recap))
@@ -288,7 +363,7 @@ def compute_recap(rows):
 
 
 # --------------------------------------------------------
-# Excel
+# Excel – colonnes JMeter-like, SANS percentiles
 # --------------------------------------------------------
 def sanitize_sheet_name(name: str) -> str:
     name = re.sub(r'[:\\/?*\[\]]', "_", name)
@@ -314,9 +389,38 @@ def write_excel(output_file: str,
     })
     cell_fmt = workbook.add_format({"border": 1})
     num_fmt = workbook.add_format({"border": 1, "num_format": "0.00"})
-    int_fmt = workbook.add_format({"border": 1, "num_format": "0"})  # entier
+    int_fmt = workbook.add_format({"border": 1, "num_format": "0"})
 
-    # --- Feuilles par scénario (détail) ---
+    # colonnes type JMeter pour chaque scénario
+    headers = [
+        "Label",
+        "# Samples",
+        "Average",
+        "Min",
+        "Max",
+        "Std. Dev.",
+        "Error %",
+        "Throughput",
+        "Received KB/sec",
+        "Sent KB/sec",
+        "Avg. Bytes",
+    ]
+
+    col_key_map = {
+        "Label": "Label",
+        "# Samples": "Samples",
+        "Average": "Average (ms)",
+        "Min": "Min (ms)",
+        "Max": "Max (ms)",
+        "Std. Dev.": "Std Dev (ms)",
+        "Error %": "Error %",
+        "Throughput": "Throughput (/min)",
+        "Received KB/sec": "Received KB/sec",
+        "Sent KB/sec": "Sent KB/sec",
+        "Avg. Bytes": "Avg Bytes",
+    }
+
+    # Feuilles par scénario
     for sheet_name_raw, rows in scenarios_data.items():
         sheet_name = sanitize_sheet_name(sheet_name_raw)
         logging.info("  -> Création de la feuille : %s", sheet_name)
@@ -327,25 +431,13 @@ def write_excel(output_file: str,
             logging.warning("    (Aucune donnée pour ce scénario)")
             continue
 
-        headers = [
-            "Label",
-            "Samples",
-            "Average (ms)",
-            "Min (ms)",
-            "Max (ms)",
-            "Std Dev (ms)",
-            "90% Line (ms)",
-            "95% Line (ms)",
-            "99% Line (ms)",
-            "Error %",
-        ]
-
         for col, h in enumerate(headers):
             ws.write(0, col, h, header_fmt)
 
         for row_idx, row in enumerate(rows, start=1):
             for col_idx, h in enumerate(headers):
-                val = row.get(h, "")
+                key = col_key_map[h]
+                val = row.get(key, "")
                 if isinstance(val, (int, float)):
                     ws.write(row_idx, col_idx, val, num_fmt)
                 else:
@@ -354,7 +446,7 @@ def write_excel(output_file: str,
         ws.set_column(0, 0, 40)
         ws.set_column(1, len(headers) - 1, 16)
 
-    # --- Onglet Data Time Response Time (Scenario / API / Response Time) ---
+    # Onglet Data Time Response Time (inchangé)
     ws_rt = workbook.add_worksheet("Data Time Response Time")
     ws_rt.write(0, 0, "Scenario", header_fmt)
     ws_rt.write(0, 1, "API", header_fmt)
@@ -367,21 +459,18 @@ def write_excel(output_file: str,
             val = rt_matrix.get(label, {}).get(users, None)
             if val is None:
                 continue
-            # API
             ws_rt.write(row_idx, 1, label, cell_fmt)
-            # Response time entier
             ws_rt.write(row_idx, 2, int(round(val)), int_fmt)
             row_idx += 1
         end_row = row_idx - 1
         if end_row >= start_row:
-            # fusion de la colonne Scenario pour ce bloc
             ws_rt.merge_range(start_row, 0, end_row, 0, users, int_fmt)
 
-    ws_rt.set_column(0, 0, 12)   # Scenario
-    ws_rt.set_column(1, 1, 20)   # API
-    ws_rt.set_column(2, 2, 20)   # Response Time
+    ws_rt.set_column(0, 0, 12)
+    ws_rt.set_column(1, 1, 20)
+    ws_rt.set_column(2, 2, 20)
 
-    # --- Onglet Data Error Rate (Scenario / API / Error Rate) ---
+    # Onglet Data Error Rate (inchangé)
     ws_err = workbook.add_worksheet("Data Error Rate")
     ws_err.write(0, 0, "Scenario", header_fmt)
     ws_err.write(0, 1, "API", header_fmt)
@@ -416,27 +505,28 @@ def write_excel(output_file: str,
 
 
 # --------------------------------------------------------
-# Word helpers (ElementTree)
+# Word helpers – tableau JMeter-like
 # --------------------------------------------------------
 def build_response_time_table_xml(recap):
     """
-    Construit le XML d'un tableau 'Response time' (string) avec le namespace w.
-    On inclut xmlns:w sur la balise racine pour que ET puisse parser.
+    Table JMeter-like :
+      Label, # Samples, Average, Min, Max, Std. Dev., Error %, Throughput,
+      Received KB/sec, Sent KB/sec, Avg. Bytes
     """
     headers = [
         "Label",
-        "Samples",
-        "Average (ms)",
-        "Min (ms)",
-        "Max (ms)",
-        "Std Dev (ms)",
-        "90% Line (ms)",
-        "95% Line (ms)",
-        "99% Line (ms)",
+        "# Samples",
+        "Average",
+        "Min",
+        "Max",
+        "Std. Dev.",
         "Error %",
+        "Throughput",
+        "Received KB/sec",
+        "Sent KB/sec",
+        "Avg. Bytes",
     ]
 
-    # Entête
     header_row_xml = "<w:tr>"
     for h in headers:
         header_row_xml += f"""
@@ -456,7 +546,6 @@ def build_response_time_table_xml(recap):
         """
     header_row_xml += "</w:tr>"
 
-    # Lignes de données
     data_rows_xml = ""
     for r in recap:
         data_rows_xml += "<w:tr>"
@@ -468,10 +557,11 @@ def build_response_time_table_xml(recap):
             r["Min (ms)"],
             r["Max (ms)"],
             r["Std Dev (ms)"],
-            r["90% Line (ms)"],
-            r["95% Line (ms)"],
-            r["99% Line (ms)"],
-            r["Error %"],
+            f"{r['Error %']:.2f}%",
+            r["Throughput (/min)"],
+            r["Received KB/sec"],
+            r["Sent KB/sec"],
+            r["Avg Bytes"],
         ]
 
         for val in cells:
@@ -514,11 +604,6 @@ def build_response_time_table_xml(recap):
 
 def generate_word_report(template_path, output_path,
                          scenarios_users, scenario_recaps, scenario_rows):
-    """
-    Modifie le template Word (DOCX comme ZIP) :
-      - remplit les dates d'exécution : {EXEC_DATE_1}, {EXEC_DATE_2}, ...
-      - remplace le paragraphe contenant {RT_TABLE_n} par un <w:tbl> construit.
-    """
     if not template_path:
         logging.warning("DOC_TEMPLATE non défini, génération Word ignorée.")
         return
@@ -537,9 +622,8 @@ def generate_word_report(template_path, output_path,
         return
 
     xml_bytes = content["word/document.xml"]
-    root = ET.fromstring(xml_bytes)   # <w:document>
+    root = ET.fromstring(xml_bytes)
 
-    # Construire une map enfant -> parent pour pouvoir remplacer les <w:p>
     parent_map = {child: parent for parent in root.iter() for child in parent}
 
     # 1) Dates d'exécution
@@ -549,7 +633,7 @@ def generate_word_report(template_path, output_path,
         exec_strings.append(compute_execution_range_string(rows))
 
     for i, date_str in enumerate(exec_strings, start=1):
-        placeholder = f"{'{'}EXEC_DATE_{i}{'}'}"
+        placeholder = f"{{EXEC_DATE_{i}}}"
         found = False
         for t in root.findall(".//w:t", NS):
             if t.text == placeholder:
@@ -566,12 +650,11 @@ def generate_word_report(template_path, output_path,
         if not recap:
             continue
 
-        placeholder = f"{'{'}RT_TABLE_{idx}{'}'}"
+        placeholder = f"{{RT_TABLE_{idx}}}"
         table_xml = build_response_time_table_xml(recap)
         table_el = ET.fromstring(table_xml)
 
         replaced = False
-        # chercher les paragraphes qui contiennent un w:t == placeholder
         for p in root.findall(".//w:p", NS):
             has_placeholder = False
             for t in p.findall(".//w:t", NS):
@@ -593,12 +676,10 @@ def generate_word_report(template_path, output_path,
             break
 
         if not replaced:
-            logging.info("Placeholder %s non trouvé pour users=%d (aucun paragraphe remplacé).", placeholder, users)
+            logging.info("Placeholder %s non trouvé pour users=%d.", placeholder, users)
 
-    # Sérialiser le XML
     new_xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
-    # Réécriture du DOCX
     with ZipFile(output_path, "w") as z:
         for name, data in content.items():
             if name == "word/document.xml":
@@ -619,10 +700,10 @@ def main():
 
         scenarios_data = {}
         scenarios_users = []
-        rt_matrix = defaultdict(dict)   # label -> {users: avg}
-        err_matrix = defaultdict(dict)  # label -> {users: error%}
-        scenario_rows = {}              # users -> rows CSV
-        scenario_recaps_by_users = {}   # users -> recap
+        rt_matrix = defaultdict(dict)
+        err_matrix = defaultdict(dict)
+        scenario_rows = {}
+        scenario_recaps_by_users = {}
 
         for f in files:
             logging.info("--------------------------------------------------")
@@ -640,7 +721,6 @@ def main():
             scenario_rows[users] = rows
             scenario_recaps_by_users[users] = recap
 
-            # alimenter les matrices pour les onglets Data*
             for r in recap:
                 if r["Label"] == "TOTAL":
                     continue
@@ -650,7 +730,6 @@ def main():
 
         write_excel(output_file, scenarios_data, scenarios_users, rt_matrix, err_matrix)
 
-        # Génération du Word si les chemins sont définis
         if doc_template and doc_output:
             generate_word_report(doc_template, doc_output,
                                  scenarios_users, scenario_recaps_by_users, scenario_rows)
