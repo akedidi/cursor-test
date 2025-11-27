@@ -189,10 +189,10 @@ def xml_escape(text: str) -> str:
 # --------------------------------------------------------
 def compute_recap(rows):
     """
-    Retourne une liste de dicts avec uniquement :
+    Retourne une liste de dicts avec :
       Label, Samples, Average (ms), Min (ms), Max (ms), Std Dev (ms),
       Error %, Throughput (/min), Received KB/sec, Sent KB/sec, Avg Bytes
-    (les 90/95/99% sont calculés mais pas stockés, donc pas visibles dans Excel)
+    (90/95/99% calculés mais non stockés)
     """
     logging.info("Calcul du tableau récapitulatif pour le scénario...")
     labels = {}
@@ -292,9 +292,9 @@ def compute_recap(rows):
         recap.append({
             "Label": label,
             "Samples": samples,
-            "Average (ms)": round(avg, 2),
-            "Min (ms)": mn,
-            "Max (ms)": mx,
+            "Average (ms)": int(round(avg)),
+            "Min (ms)": int(round(mn)),
+            "Max (ms)": int(round(mx)),
             "Std Dev (ms)": round(std_dev, 2),
             "Error %": round(err_pct, 2),
 
@@ -346,9 +346,9 @@ def compute_recap(rows):
         recap.append({
             "Label": "TOTAL",
             "Samples": total_samples_all,
-            "Average (ms)": round(total_avg, 2),
-            "Min (ms)": total_min,
-            "Max (ms)": total_max,
+            "Average (ms)": int(round(total_avg)),
+            "Min (ms)": int(round(total_min)),
+            "Max (ms)": int(round(total_max)),
             "Std Dev (ms)": round(total_std, 2),
             "Error %": round(total_err_pct, 2),
 
@@ -363,7 +363,7 @@ def compute_recap(rows):
 
 
 # --------------------------------------------------------
-# Excel – colonnes JMeter-like, SANS percentiles
+# Excel – colonnes JMeter-like, AVERAGE/MIN/MAX en entier
 # --------------------------------------------------------
 def sanitize_sheet_name(name: str) -> str:
     name = re.sub(r'[:\\/?*\[\]]', "_", name)
@@ -439,14 +439,18 @@ def write_excel(output_file: str,
                 key = col_key_map[h]
                 val = row.get(key, "")
                 if isinstance(val, (int, float)):
-                    ws.write(row_idx, col_idx, val, num_fmt)
+                    # Average / Min / Max en entier, le reste en 2 décimales
+                    if h in ["Average", "Min", "Max"]:
+                        ws.write(row_idx, col_idx, int(round(val)), int_fmt)
+                    else:
+                        ws.write(row_idx, col_idx, val, num_fmt)
                 else:
                     ws.write(row_idx, col_idx, str(val), cell_fmt)
 
         ws.set_column(0, 0, 40)
         ws.set_column(1, len(headers) - 1, 16)
 
-    # Onglet Data Time Response Time (inchangé)
+    # Onglet Data Time Response Time
     ws_rt = workbook.add_worksheet("Data Time Response Time")
     ws_rt.write(0, 0, "Scenario", header_fmt)
     ws_rt.write(0, 1, "API", header_fmt)
@@ -470,7 +474,7 @@ def write_excel(output_file: str,
     ws_rt.set_column(1, 1, 20)
     ws_rt.set_column(2, 2, 20)
 
-    # Onglet Data Error Rate (inchangé)
+    # Onglet Data Error Rate
     ws_err = workbook.add_worksheet("Data Error Rate")
     ws_err.write(0, 0, "Scenario", header_fmt)
     ws_err.write(0, 1, "API", header_fmt)
@@ -505,7 +509,7 @@ def write_excel(output_file: str,
 
 
 # --------------------------------------------------------
-# Word helpers – tableau JMeter-like
+# Word helpers – tableau JMeter-like, AVERAGE/MIN/MAX en entier
 # --------------------------------------------------------
 def build_response_time_table_xml(recap):
     """
@@ -553,9 +557,9 @@ def build_response_time_table_xml(recap):
         cells = [
             r["Label"],
             r["Samples"],
-            r["Average (ms)"],
-            r["Min (ms)"],
-            r["Max (ms)"],
+            int(r["Average (ms)"]),
+            int(r["Min (ms)"]),
+            int(r["Max (ms)"]),
             r["Std Dev (ms)"],
             f"{r['Error %']:.2f}%",
             r["Throughput (/min)"],
