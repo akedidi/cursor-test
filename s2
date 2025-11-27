@@ -7,6 +7,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 from zipfile import ZipFile
+import xml.etree.ElementTree as ET
 
 from dotenv import load_dotenv
 import xlsxwriter
@@ -19,6 +20,11 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+
+# Namespace WordprocessingML
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+NS = {"w": W_NS}
+ET.register_namespace("w", W_NS)
 
 # Ordre des labels qu'on veut dans les synthèses
 LABEL_ORDER = [
@@ -174,7 +180,6 @@ def compute_execution_range_string(rows):
     return f"{start_dt.strftime(fmt)} - {end_dt.strftime(fmt)}"
 
 
-# XML escape simple
 def xml_escape(text: str) -> str:
     if text is None:
         return ""
@@ -391,13 +396,10 @@ def write_excel(output_file: str,
                 continue
             ws_err.write(row_idx, 1, label, cell_fmt)
 
-            # formattage ErrorRate :
-            # - entier si possible
-            # - sinon 2 décimales avec un point (écrit comme texte)
             if abs(val - round(val)) < 1e-9:
                 s = str(int(round(val)))
             else:
-                s = f"{val:.2f}"  # Python utilise déjà le point comme séparateur
+                s = f"{val:.2f}"
             ws_err.write(row_idx, 2, s, cell_fmt)
 
             row_idx += 1
@@ -414,12 +416,12 @@ def write_excel(output_file: str,
 
 
 # --------------------------------------------------------
-# Word helpers (sans python-docx / lxml)
+# Word helpers (ElementTree)
 # --------------------------------------------------------
 def build_response_time_table_xml(recap):
     """
-    Construit le XML Word d'un tableau 'Response time' avec bordures
-    et police réduite (~8pt).
+    Construit le XML d'un tableau 'Response time' (string) avec le namespace w.
+    On inclut xmlns:w sur la balise racine pour que ET puisse parser.
     """
     headers = [
         "Label",
@@ -434,7 +436,7 @@ def build_response_time_table_xml(recap):
         "Error %",
     ]
 
-    # Entête (gras, petite taille)
+    # Entête
     header_row_xml = "<w:tr>"
     for h in headers:
         header_row_xml += f"""
@@ -444,7 +446,7 @@ def build_response_time_table_xml(recap):
             <w:r>
               <w:rPr>
                 <w:b/>
-                <w:sz w:val="16"/>   <!-- 8pt -->
+                <w:sz w:val="16"/>
                 <w:szCs w:val="16"/>
               </w:rPr>
               <w:t>{xml_escape(h)}</w:t>
@@ -492,7 +494,7 @@ def build_response_time_table_xml(recap):
         data_rows_xml += "</w:tr>"
 
     table_xml = f"""
-    <w:tbl>
+    <w:tbl xmlns:w="{W_NS}">
       <w:tblPr>
         <w:tblBorders>
           <w:top w:val="single" w:sz="8" w:space="0" w:color="000000"/>
@@ -507,32 +509,7 @@ def build_response_time_table_xml(recap):
       {data_rows_xml}
     </w:tbl>
     """
-    return table_xml
-
-
-def replace_paragraph_with_table(xml: str, placeholder: str, table_xml: str):
-    """
-    Remplace le paragraphe <w:p> qui contient `placeholder`
-    par le tableau XML complet `table_xml`.
-    Retourne (xml_modifié, remplacé_bool).
-    """
-    idx = xml.find(placeholder)
-    if idx == -1:
-        return xml, False
-
-    # début du paragraphe
-    p_start = xml.rfind("<w:p", 0, idx)
-    if p_start == -1:
-        return xml, False
-
-    # fin du paragraphe
-    p_end = xml.find("</w:p>", idx)
-    if p_end == -1:
-        return xml, False
-    p_end += len("</w:p>")
-
-    new_xml = xml[:p_start] + table_xml + xml[p_end:]
-    return new_xml, True
+    return table_xml.strip()
 
 
 def generate_word_report(template_path, output_path,
@@ -540,7 +517,7 @@ def generate_word_report(template_path, output_path,
     """
     Modifie le template Word (DOCX comme ZIP) :
       - remplit les dates d'exécution : {EXEC_DATE_1}, {EXEC_DATE_2}, ...
-      - insère les tableaux Response time : {RT_TABLE_1}, {RT_TABLE_2}, ...
+      - remplace le paragraphe contenant {RT_TABLE_n} par un <w:tbl> construit.
     """
     if not template_path:
         logging.warning("DOC_TEMPLATE non défini, génération Word ignorée.")
@@ -552,15 +529,18 @@ def generate_word_report(template_path, output_path,
 
     logging.info("Ouverture du template Word (ZIP) : %s", template_path)
 
-    # Lire tout le DOCX dans un dict {nom_fichier: bytes}
     with ZipFile(template_path, "r") as z:
         content = {name: z.read(name) for name in z.namelist()}
 
     if "word/document.xml" not in content:
-        logging.error("Le fichier word/document.xml est introuvable dans le template.")
+        logging.error("word/document.xml introuvable dans le template.")
         return
 
-    xml = content["word/document.xml"].decode("utf-8")
+    xml_bytes = content["word/document.xml"]
+    root = ET.fromstring(xml_bytes)   # <w:document>
+
+    # Construire une map enfant -> parent pour pouvoir remplacer les <w:p>
+    parent_map = {child: parent for parent in root.iter() for child in parent}
 
     # 1) Dates d'exécution
     exec_strings = []
@@ -569,48 +549,60 @@ def generate_word_report(template_path, output_path,
         exec_strings.append(compute_execution_range_string(rows))
 
     for i, date_str in enumerate(exec_strings, start=1):
-        placeholder = f"{{EXEC_DATE_{i}}}"
-        if placeholder in xml:
-            xml = xml.replace(placeholder, xml_escape(date_str))
+        placeholder = f"{'{'}EXEC_DATE_{i}{'}'}"
+        found = False
+        for t in root.findall(".//w:t", NS):
+            if t.text == placeholder:
+                t.text = date_str
+                found = True
+        if found:
             logging.info("Remplacement de %s par '%s'", placeholder, date_str)
         else:
             logging.info("Placeholder %s non trouvé dans le document.", placeholder)
 
     # 2) Tableaux Response time
-    tables_to_append = []  # ceux dont le placeholder n'est pas trouvé
-
     for idx, users in enumerate(sorted(scenarios_users), start=1):
         recap = scenario_recaps.get(users)
         if not recap:
             continue
 
-        placeholder = f"{{RT_TABLE_{idx}}}"
+        placeholder = f"{'{'}RT_TABLE_{idx}{'}'}"
         table_xml = build_response_time_table_xml(recap)
+        table_el = ET.fromstring(table_xml)
 
-        xml, replaced = replace_paragraph_with_table(xml, placeholder, table_xml)
-        if replaced:
+        replaced = False
+        # chercher les paragraphes qui contiennent un w:t == placeholder
+        for p in root.findall(".//w:p", NS):
+            has_placeholder = False
+            for t in p.findall(".//w:t", NS):
+                if t.text == placeholder:
+                    has_placeholder = True
+                    break
+            if not has_placeholder:
+                continue
+
+            parent = parent_map.get(p)
+            if parent is None:
+                continue
+
+            idx_in_parent = list(parent).index(p)
+            parent.remove(p)
+            parent.insert(idx_in_parent, table_el)
+            replaced = True
             logging.info("Tableau Response time inséré à la place de %s (users=%d)", placeholder, users)
-        else:
-            logging.info(
-                "Placeholder %s non trouvé en paragraphe pour users=%d, on ajoutera le tableau en fin de doc.",
-                placeholder, users
-            )
-            tables_to_append.append(table_xml)
+            break
 
-    # fallback : ajouter les tableaux restants en fin de document
-    if tables_to_append:
-        concat_tables = "\n".join(tables_to_append)
-        insert_tag = "</w:body>"
-        if insert_tag not in xml:
-            insert_tag = "</w:document>"
-        xml = xml.replace(insert_tag, concat_tables + insert_tag)
-        logging.info("%d tableau(x) ajouté(s) en fin de document (fallback).", len(tables_to_append))
+        if not replaced:
+            logging.info("Placeholder %s non trouvé pour users=%d (aucun paragraphe remplacé).", placeholder, users)
 
-    # Écrire le nouveau DOCX
+    # Sérialiser le XML
+    new_xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+    # Réécriture du DOCX
     with ZipFile(output_path, "w") as z:
         for name, data in content.items():
             if name == "word/document.xml":
-                z.writestr(name, xml.encode("utf-8"))
+                z.writestr(name, new_xml_bytes)
             else:
                 z.writestr(name, data)
 
