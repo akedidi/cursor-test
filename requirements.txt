@@ -1,0 +1,6 @@
+# Core runtime
+python-dotenv>=1.0.1
+xlsxwriter>=3.2.0
+
+# Optional only if packaging EXE
+pyinstaller>=6.6.0
