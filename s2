@@ -510,6 +510,31 @@ def build_response_time_table_xml(recap):
     return table_xml
 
 
+def replace_paragraph_with_table(xml: str, placeholder: str, table_xml: str):
+    """
+    Remplace le paragraphe <w:p> qui contient `placeholder`
+    par le tableau XML complet `table_xml`.
+    Retourne (xml_modifié, remplacé_bool).
+    """
+    idx = xml.find(placeholder)
+    if idx == -1:
+        return xml, False
+
+    # début du paragraphe
+    p_start = xml.rfind("<w:p", 0, idx)
+    if p_start == -1:
+        return xml, False
+
+    # fin du paragraphe
+    p_end = xml.find("</w:p>", idx)
+    if p_end == -1:
+        return xml, False
+    p_end += len("</w:p>")
+
+    new_xml = xml[:p_start] + table_xml + xml[p_end:]
+    return new_xml, True
+
+
 def generate_word_report(template_path, output_path,
                          scenarios_users, scenario_recaps, scenario_rows):
     """
@@ -552,6 +577,8 @@ def generate_word_report(template_path, output_path,
             logging.info("Placeholder %s non trouvé dans le document.", placeholder)
 
     # 2) Tableaux Response time
+    tables_to_append = []  # ceux dont le placeholder n'est pas trouvé
+
     for idx, users in enumerate(sorted(scenarios_users), start=1):
         recap = scenario_recaps.get(users)
         if not recap:
@@ -560,11 +587,24 @@ def generate_word_report(template_path, output_path,
         placeholder = f"{{RT_TABLE_{idx}}}"
         table_xml = build_response_time_table_xml(recap)
 
-        if placeholder in xml:
-            xml = xml.replace(placeholder, table_xml)
+        xml, replaced = replace_paragraph_with_table(xml, placeholder, table_xml)
+        if replaced:
             logging.info("Tableau Response time inséré à la place de %s (users=%d)", placeholder, users)
         else:
-            logging.info("Placeholder %s non trouvé pour users=%d", placeholder, users)
+            logging.info(
+                "Placeholder %s non trouvé en paragraphe pour users=%d, on ajoutera le tableau en fin de doc.",
+                placeholder, users
+            )
+            tables_to_append.append(table_xml)
+
+    # fallback : ajouter les tableaux restants en fin de document
+    if tables_to_append:
+        concat_tables = "\n".join(tables_to_append)
+        insert_tag = "</w:body>"
+        if insert_tag not in xml:
+            insert_tag = "</w:document>"
+        xml = xml.replace(insert_tag, concat_tables + insert_tag)
+        logging.info("%d tableau(x) ajouté(s) en fin de document (fallback).", len(tables_to_append))
 
     # Écrire le nouveau DOCX
     with ZipFile(output_path, "w") as z:
