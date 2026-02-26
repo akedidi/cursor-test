@@ -1,28 +1,65 @@
 // -------------------------------
-// Random Address - PostalCode already valid (>5)
+// Random Address - field-by-field lists (no split, no nested structures)
+// Reuse existing: Random rand = new Random()
 // -------------------------------
-def addressesList = [
-  'AGU|Aguascalientes|Aguascalientes|200000|San Marcos|Av. Universidad',
-  'CMX|Ciudad de Mexico|Benito Juárez|031000|Del Valle|Insurgentes Sur',
-  'JAL|Jalisco|Guadalajara|441000|Centro|Av. Vallarta',
-  'NLE|Nuevo León|Monterrey|640000|Obispado|Constitución',
-  'PUE|Puebla|Puebla|720000|Cholula|Blvd. 5 de Mayo'
+
+// Choose from allowed domain (per your error message)
+def addressTypes = ['HOME', 'OFFICE', 'BILLING', 'mailing', 'residence', 'previous', 'other']
+
+// Country codes: keep MX (valid ISO2) to avoid domain errors
+def countryCodes = ['MX']
+
+// Example Mexican states (cd + name aligned by index)
+def stateCds   = ['AGU', 'CMX', 'JAL', 'NLE', 'PUE', 'GUA', 'QUE']
+def stateNames = ['Aguascalientes', 'Ciudad de Mexico', 'Jalisco', 'Nuevo León', 'Puebla', 'Guanajuato', 'Querétaro']
+
+// Towns (independent list: simple mode)
+def townNames = [
+  'Aguascalientes', 'Jesús María', 'Calvillo',
+  'Benito Juárez', 'Coyoacán', 'Miguel Hidalgo', 'Cuauhtémoc', 'Iztapalapa',
+  'Guadalajara', 'Zapopan', 'Tlaquepaque', 'Tonalá',
+  'Monterrey', 'Guadalupe', 'San Nicolás', 'San Pedro Garza García',
+  'Puebla', 'San Andrés Cholula', 'San Pedro Cholula',
+  'León', 'Irapuato', 'Celaya',
+  'Querétaro', 'San Juan del Río', 'El Marqués'
 ]
 
-// Pick 1 address
-def line = addressesList[rand.nextInt(addressesList.size())]
-def parts = line.split('\\|', -1)
+// Neighbourhoods / streets / complements
+def neighbourhoodNames = ['San Pedro', 'Centro', 'Roma Norte', 'Condesa', 'Del Valle', 'Polanco', 'Narvarte', 'Juárez', 'Doctores', 'Obrera']
+def addressNames       = ['Patriotismo', 'Insurgentes', 'Reforma', 'Universidad', 'Tlalpan', 'Circuito Interior', 'Viaducto', 'Zaragoza', 'Constituyentes']
+def complementNames    = ['Depto. 101', 'Depto. 202', 'Interior 3', 'Piso 2', 'Torre A, Depto 12', 'Casa 4', 'Local 5', 'Oficina 301']
 
-vars.put('addressType', 'HOME')   // valeur valide selon ton API
-vars.put('countryCode', 'MX')     // ISO valide
-vars.put('stateCd', parts[0])
-vars.put('stateName', parts[1])
-vars.put('townName', parts[2])
-vars.put('postalCode', parts[3])  // déjà 6 caractères
-vars.put('neighbourhoodName', parts[4])
-vars.put('addressName', parts[5])
-vars.put('streetNb', String.valueOf(rand.nextInt(250) + 1))
-vars.put('complementAddressName', "Depto. " + (rand.nextInt(300) + 1))
+// ---- Random pick per field ----
+def addressType = addressTypes[rand.nextInt(addressTypes.size())]
+def countryCode = countryCodes[rand.nextInt(countryCodes.size())]
 
-// Debug temporaire
-log.info("DEBUG Address => " + line)
+// Keep stateCd/stateName consistent using same index
+def stIdx = rand.nextInt(stateCds.size())
+def stateCd = stateCds[stIdx]
+def stateName = stateNames[stIdx]
+
+// Random town (independent)
+def townName = townNames[rand.nextInt(townNames.size())]
+
+// API constraint: postalCode length > 5 => generate 6 digits
+def postalCode = String.valueOf(rand.nextInt(900000) + 100000) // 100000..999999
+
+def neighbourhoodName = neighbourhoodNames[rand.nextInt(neighbourhoodNames.size())]
+def addressName = addressNames[rand.nextInt(addressNames.size())]
+def streetNb = String.valueOf(rand.nextInt(250) + 1)
+def complementAddressName = complementNames[rand.nextInt(complementNames.size())]
+
+// ---- Set JMeter vars ----
+vars.put('addressType', addressType)
+vars.put('countryCode', countryCode)
+vars.put('stateCd', stateCd)
+vars.put('stateName', stateName)
+vars.put('postalCode', postalCode)
+vars.put('townName', townName)
+vars.put('neighbourhoodName', neighbourhoodName)
+vars.put('addressName', addressName)
+vars.put('streetNb', streetNb)
+vars.put('complementAddressName', complementAddressName)
+
+// Debug (temp)
+log.info("ADDR => type=${addressType}, ${countryCode}, ${stateCd}/${stateName}, town=${townName}, cp=${postalCode}, ${addressName} ${streetNb}")
