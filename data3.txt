@@ -1,0 +1,28 @@
+// -------------------------------
+// Random Address - PostalCode already valid (>5)
+// -------------------------------
+def addressesList = [
+  'AGU|Aguascalientes|Aguascalientes|200000|San Marcos|Av. Universidad',
+  'CMX|Ciudad de Mexico|Benito Juárez|031000|Del Valle|Insurgentes Sur',
+  'JAL|Jalisco|Guadalajara|441000|Centro|Av. Vallarta',
+  'NLE|Nuevo León|Monterrey|640000|Obispado|Constitución',
+  'PUE|Puebla|Puebla|720000|Cholula|Blvd. 5 de Mayo'
+]
+
+// Pick 1 address
+def line = addressesList[rand.nextInt(addressesList.size())]
+def parts = line.split('\\|', -1)
+
+vars.put('addressType', 'HOME')   // valeur valide selon ton API
+vars.put('countryCode', 'MX')     // ISO valide
+vars.put('stateCd', parts[0])
+vars.put('stateName', parts[1])
+vars.put('townName', parts[2])
+vars.put('postalCode', parts[3])  // déjà 6 caractères
+vars.put('neighbourhoodName', parts[4])
+vars.put('addressName', parts[5])
+vars.put('streetNb', String.valueOf(rand.nextInt(250) + 1))
+vars.put('complementAddressName', "Depto. " + (rand.nextInt(300) + 1))
+
+// Debug temporaire
+log.info("DEBUG Address => " + line)
