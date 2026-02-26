@@ -1,0 +1,57 @@
+// -------------------------------
+// Random address (MX)
+// Reuse existing: Random rand = new Random()
+// -------------------------------
+
+// Small datasets
+def states = [
+        [cd: 'AGU', name: 'Aguascalientes', towns: ['Aguascalientes', 'Jesús María', 'Calvillo']],
+        [cd: 'CMX', name: 'Ciudad de Mexico', towns: ['Benito Juárez', 'Coyoacán', 'Miguel Hidalgo', 'Cuauhtémoc', 'Iztapalapa']],
+        [cd: 'JAL', name: 'Jalisco', towns: ['Guadalajara', 'Zapopan', 'Tlaquepaque', 'Tonalá']],
+        [cd: 'NLE', name: 'Nuevo León', towns: ['Monterrey', 'San Pedro Garza García', 'Guadalupe', 'San Nicolás']],
+        [cd: 'PUE', name: 'Puebla', towns: ['Puebla', 'San Andrés Cholula', 'San Pedro Cholula']],
+        [cd: 'GUA', name: 'Guanajuato', towns: ['León', 'Irapuato', 'Celaya', 'Guanajuato']],
+        [cd: 'QUE', name: 'Querétaro', towns: ['Querétaro', 'San Juan del Río', 'El Marqués']]
+]
+
+def neighbourhoods = [
+        'San Pedro', 'Centro', 'Roma Norte', 'Condesa', 'Del Valle',
+        'Polanco', 'Narvarte', 'Juárez', 'Doctores', 'Obrera'
+]
+
+def streets = [
+        'Patriotismo', 'Insurgentes', 'Reforma', 'Universidad',
+        'Tlalpan', 'Circuito Interior', 'Viaducto', 'Zaragoza', 'Constituyentes'
+]
+
+def complements = [
+        'Depto. 101', 'Depto. 202', 'Interior 3', 'Piso 2',
+        'Torre A, Depto 12', 'Casa 4', 'Local 5', 'Oficina 301'
+]
+
+// Pick random values
+def st = states[rand.nextInt(states.size())]
+def town = st.towns[rand.nextInt(st.towns.size())]
+
+// Keep HOME like your screenshot (or randomize if you want)
+def addressType = 'HOME'
+
+// Generate numeric fields
+def postalCode = String.format('%05d', (rand.nextInt(90000) + 10000)) // 10000..99999
+def streetNb   = String.valueOf(rand.nextInt(249) + 1)               // 1..249
+
+def neighbourhoodName     = neighbourhoods[rand.nextInt(neighbourhoods.size())]
+def addressName           = streets[rand.nextInt(streets.size())]
+def complementAddressName = complements[rand.nextInt(complements.size())]
+
+// Set JMeter variables used in JSON Body
+vars.put('addressType', addressType)
+vars.put('countryCode', 'MX')
+vars.put('stateCd', st.cd)
+vars.put('stateName', st.name)
+vars.put('postalCode', postalCode)
+vars.put('townName', town)
+vars.put('neighbourhoodName', neighbourhoodName)
+vars.put('addressName', addressName)
+vars.put('streetNb', streetNb)
+vars.put('complementAddressName', complementAddressName)
