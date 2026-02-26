@@ -1,0 +1,65 @@
+// -------------------------------
+// Random Address - Single Structured List
+// -------------------------------
+
+def addressesList = [
+    [
+        stateCd: 'AGU',
+        stateName: 'Aguascalientes',
+        townName: 'Aguascalientes',
+        postalCode: '20000',
+        neighbourhoodName: 'San Marcos',
+        addressName: 'Av. Universidad'
+    ],
+    [
+        stateCd: 'CMX',
+        stateName: 'Ciudad de Mexico',
+        townName: 'Benito Juárez',
+        postalCode: '03100',
+        neighbourhoodName: 'Del Valle',
+        addressName: 'Insurgentes Sur'
+    ],
+    [
+        stateCd: 'JAL',
+        stateName: 'Jalisco',
+        townName: 'Guadalajara',
+        postalCode: '44100',
+        neighbourhoodName: 'Centro',
+        addressName: 'Av. Vallarta'
+    ],
+    [
+        stateCd: 'NLE',
+        stateName: 'Nuevo León',
+        townName: 'Monterrey',
+        postalCode: '64000',
+        neighbourhoodName: 'Obispado',
+        addressName: 'Constitución'
+    ],
+    [
+        stateCd: 'PUE',
+        stateName: 'Puebla',
+        townName: 'Puebla',
+        postalCode: '72000',
+        neighbourhoodName: 'Cholula',
+        addressName: 'Blvd. 5 de Mayo'
+    ]
+]
+
+// Pick ONE random structured address
+def addr = addressesList[rand.nextInt(addressesList.size())]
+
+// Small dynamic variations
+def streetNb = String.valueOf(rand.nextInt(250) + 1)
+def complement = "Depto. " + (rand.nextInt(300) + 1)
+
+// Set JMeter variables
+vars.put('addressType', 'HOME')
+vars.put('countryCode', 'MX')
+vars.put('stateCd', addr.stateCd)
+vars.put('stateName', addr.stateName)
+vars.put('postalCode', addr.postalCode)
+vars.put('townName', addr.townName)
+vars.put('neighbourhoodName', addr.neighbourhoodName)
+vars.put('addressName', addr.addressName)
+vars.put('streetNb', streetNb)
+vars.put('complementAddressName', complement)
