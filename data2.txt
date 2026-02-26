@@ -63,3 +63,19 @@ vars.put('neighbourhoodName', addr.neighbourhoodName)
 vars.put('addressName', addr.addressName)
 vars.put('streetNb', streetNb)
 vars.put('complementAddressName', complement)
+
+
+"addresses": [
+  {
+    "addressType": "${addressType}",
+    "countryCode": "${countryCode}",
+    "stateCd": "${stateCd}",
+    "stateName": "${stateName}",
+    "postalCode": "${postalCode}",
+    "townName": "${townName}",
+    "neighbourhoodName": "${neighbourhoodName}",
+    "addressName": "${addressName}",
+    "streetNb": "${streetNb}",
+    "complementAddressName": "${complementAddressName}"
+  }
+]
