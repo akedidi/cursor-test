@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.math.BigInteger
 
 def filePath = 'C:/jmeter-data/policy.properties'
 def file = new File(filePath)
@@ -16,6 +17,7 @@ if (lock == null) {
 }
 
 synchronized (lock) {
+    // Initialisation / lecture
     if (file.exists()) {
         file.withInputStream { propsFile.load(it) }
     } else {
@@ -29,24 +31,30 @@ synchronized (lock) {
         throw new Exception("policy_number_bns absent du fichier")
     }
 
-    // récupère toute la partie numérique à droite
-    def matcher = (policy =~ /(\d+)$/)
-    if (!matcher.find()) {
-        throw new Exception("Format invalide: ${policy}")
+    // Validation stricte du format : 2 chiffres . 16 chiffres
+    if (!(policy ==~ /^\d{2}\.\d{16}$/)) {
+        throw new Exception("Format invalide pour policy_number_bns: ${policy} (attendu: 2 chiffres, point, 16 chiffres)")
     }
 
-    def suffix = matcher.group(1)
-    def prefix = policy.substring(0, policy.length() - suffix.length())
+    def parts = policy.split('\\.')
+    def leftPart = parts[0]          // ex: 05
+    def rightPart = parts[1]         // ex: 0202025618001509
 
-    // incrément sur toute la partie numérique finale
-    def newSuffix = (new BigInteger(suffix) + BigInteger.ONE).toString()
+    def originalLength = 16
+    def incremented = (new BigInteger(rightPart) + BigInteger.ONE).toString()
 
-    def newPolicy = prefix + newSuffix
+    // Refuser tout dépassement de 16 chiffres
+    if (incremented.length() > originalLength) {
+        throw new Exception("Overflow policy_number_bns: impossible d'incrémenter ${policy} sans dépasser 16 chiffres après le point")
+    }
 
-    // valeur pour cette itération
+    def newRightPart = incremented.padLeft(originalLength, '0')
+    def newPolicy = leftPart + '.' + newRightPart
+
+    // Valeur utilisée par Sale puis Cancellation
     vars.put('policy_number_bns', newPolicy)
 
-    // persistance
+    // Persistance disque
     propsFile.setProperty('policy_number_bns', newPolicy)
     file.withOutputStream { os -> propsFile.store(os, 'policy') }
 
