@@ -1,64 +1,54 @@
 import java.util.Properties
 
 def filePath = 'C:/jmeter-data/policy.properties'
-def lockName = 'POLICY_FILE_LOCK'
+def file = new File(filePath)
+def propsFile = new Properties()
 
-// verrou global JMeter partagé entre threads
-def lock = props.get(lockName)
+def lock = props.get('POLICY_FILE_LOCK')
 if (lock == null) {
     synchronized (this.class) {
-        lock = props.get(lockName)
+        lock = props.get('POLICY_FILE_LOCK')
         if (lock == null) {
             lock = new Object()
-            props.put(lockName, lock)
+            props.put('POLICY_FILE_LOCK', lock)
         }
     }
 }
 
 synchronized (lock) {
-    def file = new File(filePath)
-    def propsFile = new Properties()
-
-    // initialisation si le fichier n'existe pas
-    if (!file.exists()) {
+    if (file.exists()) {
+        file.withInputStream { propsFile.load(it) }
+    } else {
         file.parentFile?.mkdirs()
         propsFile.setProperty('policy_number_bns', '05.0202025618001500')
-        file.withOutputStream { os ->
-            propsFile.store(os, 'JMeter policy number')
-        }
-    }
-
-    // lecture
-    file.withInputStream { input ->
-        propsFile.load(input)
+        file.withOutputStream { os -> propsFile.store(os, 'policy') }
     }
 
     def policy = propsFile.getProperty('policy_number_bns')
     if (!policy) {
-        throw new Exception("La clé policy_number_bns est absente du fichier")
+        throw new Exception("policy_number_bns absent du fichier")
     }
 
-    // extrait toute la partie numérique finale
+    // récupère toute la partie numérique à droite
     def matcher = (policy =~ /(\d+)$/)
     if (!matcher.find()) {
-        throw new Exception("Aucune partie numérique finale trouvée dans : " + policy)
+        throw new Exception("Format invalide: ${policy}")
     }
 
     def suffix = matcher.group(1)
     def prefix = policy.substring(0, policy.length() - suffix.length())
 
-    // incrément réel avec retenue
-    def newSuffix = (suffix.toLong() + 1).toString().padStart(suffix.length(), '0')
+    // incrément sur toute la partie numérique finale
+    def newSuffix = (new BigInteger(suffix) + BigInteger.ONE).toString()
+
     def newPolicy = prefix + newSuffix
 
-    // variable JMeter pour usage immédiat
+    // valeur pour cette itération
     vars.put('policy_number_bns', newPolicy)
 
-    // persistance disque
+    // persistance
     propsFile.setProperty('policy_number_bns', newPolicy)
-    file.withOutputStream { os ->
-        propsFile.store(os, 'JMeter policy number')
-    }
+    file.withOutputStream { os -> propsFile.store(os, 'policy') }
 
-    log.info("policy_number_bns saved = ${newPolicy}")
+    log.info("Generated policy_number_bns = ${newPolicy}")
 }
