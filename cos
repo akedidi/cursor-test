@@ -71,3 +71,20 @@ Observed values in Production:
 These values appear to correspond to the Non-Production configuration instead of the expected Production configuration.
 
 As a result, the beneficiary payment information displayed in Production is not aligned with the expected bank details.
+
+***
+Additional context from UAT environment:
+
+Attached screenshots illustrate the current configuration behavior in UAT:
+
+- The payment method configuration for Coppel shows:
+  - Bank: Banco Interacciones, S.A.
+  - Bank code / account: masked value ending with 9012
+
+- The beneficiary screen in a claim confirms that these values are automatically pre-filled in the UI and used during the business process.
+
+This demonstrates that:
+- The configuration is correctly injected into the UI and business flow
+- However, the values correspond to the non-production configuration
+
+Production currently appears to reflect the same configuration, whereas it should use different bank details specific to Production.
