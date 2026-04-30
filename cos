@@ -1,0 +1,62 @@
+We have identified an issue in Production related to the bank account configuration used when adding Coppel as a beneficiary.
+
+When Coppel is added as a beneficiary, the payment information is expected to be pre-filled automatically with the correct Production bank details.
+
+However, the current configuration in Production does not match the expected Production values. It appears that the Production configuration is still reflecting the Non-Production bank details.
+
+Current observed configuration in Production:
+- Bank / Banco: Banco Interacciones, S.A.
+- Bank code: masked value ending with 9012
+- Comment: this appears to correspond to the Non-Production configuration.
+
+Expected configuration in Production:
+- Bank / Banco: BBVA Bancomer, S.A.
+- Bank code: 012730044313711714
+- Comment: this should be the bank information used when adding Coppel as a beneficiary in Production.
+
+We need the EIS SaaS / GCS team to analyze this issue and confirm how this configuration is currently managed in Production.
+
+Before applying any direct change in the Production GUI or any configuration update, please validate the impact on historical transactions.
+
+Expected behavior after the fix:
+- No change should be made to previous or historical transactions.
+- The corrected Production values should apply only to new transactions created after the fix.
+- The fix should be permanent and environment-specific, not a manual temporary Production update.
+
+Please also confirm whether this configuration can be managed through an environment-specific Liquibase script or properties file, and whether a specific hotfix is required for this Production issue.
+
+******  Steps to reproduce
+1. Connect to the Production environment.
+2. Start the process to add a beneficiary.
+3. Select "Coppel" as beneficiary.
+4. Observe the payment information automatically pre-filled (bank name and bank code).
+5. Compare the displayed values with the expected Production configuration.
+
+******  Expected result
+When adding Coppel as a beneficiary in Production, the payment information should be pre-filled with the correct Production values:
+
+- Bank / Banco: BBVA Bancomer, S.A.
+- Bank code: 012730044313711714
+
+The correction should apply only to new transactions.
+
+No modification should be made to existing or historical transactions.
+
+******  Business impact
+If not corrected, new transactions involving Coppel in Production may use incorrect bank account details.
+
+This can lead to:
+- Incorrect payment processing or routing
+- Potential payment failures or delays
+- Financial and operational risks
+- Manual corrections and additional workload
+- Loss of trust from business stakeholders
+
+Given that this impacts Production payment configuration, the issue is considered high severity.
+
+******    Root cause – short description
+Root cause is currently unknown.
+
+Initial assumption is that the Production configuration has not been properly updated and is still aligned with Non-Production values, or that environment-specific configuration management is not correctly applied.
+
+Further analysis is required from the EIS SaaS / GCS team.
