@@ -60,3 +60,14 @@ Root cause is currently unknown.
 Initial assumption is that the Production configuration has not been properly updated and is still aligned with Non-Production values, or that environment-specific configuration management is not correctly applied.
 
 Further analysis is required from the EIS SaaS / GCS team.
+
+****  Actual results
+When adding Coppel as a beneficiary in Production, the payment information automatically pre-filled is incorrect.
+
+Observed values in Production:
+- Bank / Banco: Banco Interacciones, S.A.
+- Bank code: masked value ending with 9012
+
+These values appear to correspond to the Non-Production configuration instead of the expected Production configuration.
+
+As a result, the beneficiary payment information displayed in Production is not aligned with the expected bank details.
