@@ -1,0 +1,157 @@
+def generate_word_report(template_path, output_path,
+                         scenarios_users, scenario_recaps, scenario_rows):
+    if not template_path:
+        logging.warning("DOC_TEMPLATE non défini, génération Word ignorée.")
+        return
+
+    if not os.path.isfile(template_path):
+        logging.error("DOC_TEMPLATE n'existe pas : %s", template_path)
+        return
+
+    logging.info("Ouverture du template Word (ZIP) : %s", template_path)
+
+    with ZipFile(template_path, "r") as z:
+        content = {name: z.read(name) for name in z.namelist()}
+
+    if "word/document.xml" not in content:
+        logging.error("word/document.xml introuvable dans le template.")
+        return
+
+    xml_bytes = content["word/document.xml"]
+    root = ET.fromstring(xml_bytes)
+
+    parent_map = {child: parent for parent in root.iter() for child in parent}
+
+    # 1) Dates d'exécution
+    exec_strings = []
+    for users in sorted(scenarios_users):
+        rows = scenario_rows.get(users, [])
+        exec_strings.append(compute_execution_range_string(rows))
+
+    for i, date_str in enumerate(exec_strings, start=1):
+        placeholder = f"{{EXEC_DATE_{i}}}"
+        found = False
+
+        for t in root.findall(".//w:t", NS):
+            if t.text == placeholder:
+                t.text = date_str
+                found = True
+
+        if found:
+            logging.info("Remplacement de %s par '%s'", placeholder, date_str)
+        else:
+            logging.info("Placeholder %s non trouvé dans le document.", placeholder)
+
+    # 2) Tableaux Response time
+    for idx, users in enumerate(sorted(scenarios_users), start=1):
+        recap = scenario_recaps.get(users)
+
+        if not recap:
+            continue
+
+        placeholder = f"{{RT_TABLE_{idx}}}"
+        table_xml = build_response_time_table_xml(recap)
+        table_el = ET.fromstring(table_xml)
+
+        replaced = False
+
+        for p in root.findall(".//w:p", NS):
+            has_placeholder = False
+
+            for t in p.findall(".//w:t", NS):
+                if t.text == placeholder:
+                    has_placeholder = True
+                    break
+
+            if not has_placeholder:
+                continue
+
+            parent = parent_map.get(p)
+
+            if parent is None:
+                continue
+
+            idx_in_parent = list(parent).index(p)
+            parent.remove(p)
+            parent.insert(idx_in_parent, table_el)
+
+            replaced = True
+            logging.info("Tableau Response time inséré à la place de %s (users=%d)", placeholder, users)
+            break
+
+        if not replaced:
+            logging.info("Placeholder %s non trouvé pour users=%d.", placeholder, users)
+
+    # 3) Remplacement des placeholders RT Average / SLA
+    for idx, users in enumerate(sorted(scenarios_users), start=1):
+        rows = scenario_rows.get(users, [])
+
+        if not rows:
+            continue
+
+        avg_all, avg_pdf, sla_all_ok, sla_pdf_ok = compute_sla_metrics(rows)
+
+        check_ok = "✔"
+        check_ko = "✘"
+
+        placeholders = {
+            f"{{RT_AVERAGE_ALL_{idx}}}": str(avg_all),
+            f"{{CHECK_SLA_ALL_{idx}}}": check_ok if sla_all_ok else check_ko,
+            f"{{RT_AVERAGE_PDF_{idx}}}": str(avg_pdf),
+            f"{{CHECK_SLA_PDF_{idx}}}": check_ok if sla_pdf_ok else check_ko,
+        }
+
+        for placeholder, value in placeholders.items():
+            found = False
+            text_nodes = root.findall(".//w:t", NS)
+
+            # Cas simple : placeholder entier dans un seul w:t
+            for t in text_nodes:
+                if t.text and placeholder in t.text:
+                    t.text = t.text.replace(placeholder, value)
+                    found = True
+                    break
+
+            # Cas Word : placeholder découpé entre plusieurs w:t
+            if not found:
+                for start_index in range(len(text_nodes)):
+                    buffer = ""
+                    involved_nodes = []
+
+                    for current_index in range(start_index, len(text_nodes)):
+                        current_text = text_nodes[current_index].text or ""
+                        buffer += current_text
+                        involved_nodes.append(text_nodes[current_index])
+
+                        if placeholder in buffer:
+                            new_buffer = buffer.replace(placeholder, value)
+
+                            involved_nodes[0].text = new_buffer
+
+                            for node in involved_nodes[1:]:
+                                node.text = ""
+
+                            found = True
+                            break
+
+                        if len(buffer) > len(placeholder) + 100:
+                            break
+
+                    if found:
+                        break
+
+            if found:
+                logging.info("Remplacement de %s par %s", placeholder, value)
+            else:
+                logging.info("Placeholder %s non trouvé", placeholder)
+
+    new_xml_bytes = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+    with ZipFile(output_path, "w") as z:
+        for name, data in content.items():
+            if name == "word/document.xml":
+                z.writestr(name, new_xml_bytes)
+            else:
+                z.writestr(name, data)
+
+    logging.info("Document Word généré : %s", output_path)
