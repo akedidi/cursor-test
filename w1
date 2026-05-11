@@ -103,17 +103,27 @@ def generate_word_report(template_path, output_path,
 
         for placeholder, value in placeholders.items():
             found = False
-            text_nodes = root.findall(".//w:t", NS)
 
-            # Cas simple : placeholder entier dans un seul w:t
-            for t in text_nodes:
-                if t.text and placeholder in t.text:
-                    t.text = t.text.replace(placeholder, value)
-                    found = True
+            # Important: work paragraph-by-paragraph.
+            # This avoids merging content across different Word table cells.
+            for p in root.findall(".//w:p", NS):
+                text_nodes = p.findall(".//w:t", NS)
+
+                if not text_nodes:
+                    continue
+
+                # Case 1: placeholder is fully inside one <w:t>
+                for t in text_nodes:
+                    if t.text and placeholder in t.text:
+                        t.text = t.text.replace(placeholder, str(value))
+                        found = True
+                        break
+
+                if found:
                     break
 
-            # Cas Word : placeholder découpé entre plusieurs w:t
-            if not found:
+                # Case 2: Word split the placeholder across multiple <w:t>,
+                # but still inside the same paragraph/cell.
                 for start_index in range(len(text_nodes)):
                     buffer = ""
                     involved_nodes = []
@@ -124,7 +134,7 @@ def generate_word_report(template_path, output_path,
                         involved_nodes.append(text_nodes[current_index])
 
                         if placeholder in buffer:
-                            new_buffer = buffer.replace(placeholder, value)
+                            new_buffer = buffer.replace(placeholder, str(value))
 
                             involved_nodes[0].text = new_buffer
 
@@ -139,6 +149,9 @@ def generate_word_report(template_path, output_path,
 
                     if found:
                         break
+
+                if found:
+                    break
 
             if found:
                 logging.info("Remplacement de %s par %s", placeholder, value)
