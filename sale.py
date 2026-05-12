@@ -75,4 +75,77 @@ for idx, users in enumerate(sorted(scenarios_users), start=1):
             "Placeholder %s non trouvé dans le document.",
             placeholder
         )
+        
+        
+        
+        
+        
+        
+        # 1.b) Sales per minute
+for idx, users in enumerate(sorted(scenarios_users), start=1):
+
+    rows = scenario_rows.get(users, [])
+    if not rows:
+        continue
+
+    sale_min = compute_sale_per_minute(rows)
+    placeholder = f"{{SALE_MIN_{idx}}}"
+
+    found = False
+
+    # On travaille paragraphe par paragraphe pour ne pas mélanger les cellules/titres
+    for p in root.findall(".//w:p", NS):
+        text_nodes = p.findall(".//w:t", NS)
+
+        if not text_nodes:
+            continue
+
+        # Cas simple : placeholder entier dans un seul <w:t>
+        for t in text_nodes:
+            if t.text and placeholder in t.text:
+                t.text = t.text.replace(placeholder, str(sale_min))
+                found = True
+                break
+
+        if found:
+            break
+
+        # Cas où Word a coupé le placeholder en plusieurs <w:t>
+        for start_index in range(len(text_nodes)):
+            buffer = ""
+            involved_nodes = []
+
+            for current_index in range(start_index, len(text_nodes)):
+                current_text = text_nodes[current_index].text or ""
+                buffer += current_text
+                involved_nodes.append(text_nodes[current_index])
+
+                if placeholder in buffer:
+                    new_buffer = buffer.replace(placeholder, str(sale_min))
+
+                    involved_nodes[0].text = new_buffer
+
+                    for node in involved_nodes[1:]:
+                        node.text = ""
+
+                    found = True
+                    break
+
+                if len(buffer) > len(placeholder) + 100:
+                    break
+
+            if found:
+                break
+
+        if found:
+            break
+
+    if found:
+        logging.info("Remplacement de %s par '%s'", placeholder, sale_min)
+    else:
+        logging.info("Placeholder %s non trouvé dans le document.", placeholder)
+        
+        
+        
+        
     
