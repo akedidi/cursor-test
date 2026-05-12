@@ -39,3 +39,40 @@ def compute_sale_per_minute(rows):
     sale_per_min = sale_count / duration_min
 
     return f"{sale_per_min:.2f}"
+    
+    
+    
+    
+    
+    
+    # 1.b) Sales per minute
+for idx, users in enumerate(sorted(scenarios_users), start=1):
+
+    rows = scenario_rows.get(users, [])
+    if not rows:
+        continue
+
+    sale_min = compute_sale_per_minute(rows)
+
+    placeholder = f"{{SALE_MIN_{idx}}}"
+
+    found = False
+
+    for t in root.findall(".//w:t", NS):
+
+        if t.text == placeholder:
+            t.text = sale_min
+            found = True
+
+    if found:
+        logging.info(
+            "Remplacement de %s par '%s'",
+            placeholder,
+            sale_min
+        )
+    else:
+        logging.info(
+            "Placeholder %s non trouvé dans le document.",
+            placeholder
+        )
+    
