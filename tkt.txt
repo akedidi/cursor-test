@@ -1,0 +1,114 @@
+Ticket 1 — Bulk cancellation verification
+Summary
+
+[Coppel][PROD] Verification of ~877 cancellation requests received on May 14th around 2AM MX time
+
+Description
+
+Coppel reported that around 877 cancellation requests were sent on May 14th around 2:00 AM MX time.
+
+We need support from EIS team to verify:
+
+whether these requests were received by EIS,
+how many requests effectively reached EIS,
+whether they were successfully processed or rejected,
+and provide technical evidence if available.
+
+Requested investigation points:
+
+timestamps,
+processing status,
+response/error codes,
+correlation/request identifiers,
+source/origin IP if visible,
+any rejected, timed-out or missing requests.
+
+This request is part of an ongoing customer escalation and requires investigation on EIS side.
+
+What is the business impact if the issue is not solved with desired severity
+
+Unable to confirm whether customer cancellation requests were correctly processed in production.
+
+This may lead to:
+
+customer escalation,
+uncertainty regarding policy cancellation status,
+operational reconciliation issues between Coppel and EIS,
+potential financial and customer service impacts.
+
+The MX team is expecting feedback urgently.
+
+Steps to reproduce
+Review EIS logs and monitoring data for May 14th around 2:00 AM MX time.
+Search for incoming cancellation requests originating from Coppel.
+Verify the number of requests received and processed.
+Check whether any requests were rejected, timed out or not received.
+Expected result
+
+EIS should confirm:
+
+the number of cancellation requests received,
+successful or failed processing status,
+and provide technical evidence/logs supporting the investigation.
+Actual results
+
+Customer reported approximately 877 cancellation requests sent from Coppel around 2:00 AM MX time, but confirmation from EIS side is currently missing.
+
+Ticket 2 — Rejected cancellation request investigation
+Summary
+
+[Coppel][PROD] Investigation of rejected cancellation request on May 14th around 3:58 PM MX time
+
+Description
+
+A cancellation request sent on May 14th around 3:58 PM MX time was reportedly rejected.
+
+Support from EIS team is required to investigate:
+
+whether the request reached EIS,
+the exact rejection reason,
+and whether the rejection was caused by:
+saturation/load issue,
+internal technical error,
+timeout/connectivity issue,
+or EIS business rule validation.
+
+Requested investigation points:
+
+timestamps,
+processing logs,
+response/error codes,
+correlation/request identifiers,
+backend exceptions or validation messages,
+monitoring/Dynatrace evidence if available.
+
+This issue is part of an ongoing customer escalation.
+
+What is the business impact if the issue is not solved with desired severity
+
+The customer cannot determine why the cancellation request failed.
+
+This may lead to:
+
+blocked or inconsistent policy cancellation process,
+customer dissatisfaction,
+repeated cancellation attempts,
+operational issues between Coppel and EIS,
+and continued production escalation.
+
+The MX team is expecting a clear RCA urgently.
+
+Steps to reproduce
+Review EIS logs and monitoring data for May 14th around 3:58 PM MX time.
+Search for the related cancellation request.
+Verify whether the request reached EIS.
+Analyze processing flow and identify the rejection cause.
+Expected result
+
+The cancellation request should be successfully processed or rejected with a clear and identifiable error reason.
+
+EIS investigation should provide the exact RCA and supporting evidence.
+
+Actual results
+
+Customer reported that a cancellation request sent around 3:58 PM MX time was rejected, but the exact reason is currently unknown.
