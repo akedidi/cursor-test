@@ -1,0 +1,35 @@
+Brief Description
+
+Investigation request regarding cancellation API calls reported by Coppel on May 14th, including verification of ~877 cancellation requests around 2:00 AM MX time and analysis of one rejected cancellation request around 3:58 PM MX time from Apigee/API Gateway perspective before reaching EIS backend.
+
+Description
+
+Coppel reported two issues related to cancellation API requests on May 14th in Production environment.
+
+This investigation request is addressed to Apigee/API Gateway team in order to verify API traffic and request flow before requests reach EIS backend.
+
+Around 2:00 AM MX time, approximately 877 cancellation requests were reportedly sent by Coppel. Support is required to verify from Apigee side:
+whether these API requests were received by the gateway,
+how many requests effectively passed through Apigee,
+request timestamps,
+response/error codes,
+correlation/request identifiers,
+origin/source IP,
+and whether any requests were rejected, throttled, timed out or failed before reaching EIS backend.
+Around 3:58 PM MX time, one cancellation request was reportedly rejected. Support is required to investigate from Apigee/API Gateway perspective:
+whether the request passed through Apigee,
+gateway response status,
+potential throttling or saturation issue,
+timeout/connectivity issue,
+routing failure,
+or any technical issue occurring before request transmission to EIS backend.
+
+Requested outputs:
+
+API gateway investigation results,
+logs and technical evidence,
+request tracing details,
+response/error information,
+and any findings helping determine whether issues occurred before reaching EIS backend.
+
+This request is part of an ongoing customer escalation and urgent feedback is expected by MX team.
