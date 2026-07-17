@@ -1,5 +1,7 @@
 Hi EIS team,
 
-API Gateway confirmed that they do not see any failed requests reaching their side and believe the token request may not be reaching APIGW at all. As the same timeout is observed in both STAGING and PROD, could you please investigate the path between EIS and the mTLS Gateway, including gateway logs, connection drops, routing, DNS/IP resolution and any recent IP rotation?
+API Gateway confirmed that no failed token requests are visible on their side, suggesting that the request may not be forwarded beyond the mTLS Gateway.
 
-The objective is to confirm whether the request reaches the mTLS Gateway and identify the exact hop where the timeout occurs.
+Could you please investigate the mTLS Gateway logs to confirm whether the request is received, whether it is successfully forwarded to APIGW, and which response or timeout is returned to EIS? Please also check for any connection drops, routing, DNS/IP resolution or upstream connectivity issues between the mTLS Gateway and APIGW.
+
+The objective is to identify whether the timeout occurs while forwarding the request from the mTLS Gateway to APIGW.
