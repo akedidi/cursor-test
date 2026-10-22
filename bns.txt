@@ -25,3 +25,8 @@ if (!file.isFile()) {
 file.withInputStream {
     propsFile.load(it)
 }
+
+
+
+
+bnspolicynumber.path=C:/Users/h83572/BNP Paribas/BusinessPlatforms - Documents/Business Platforms for LATAM/50_TES_Tests/Performances test/Jmeter/IDP API's_PPROD_ALL_SCENARI - CPL+BNS/bnspolicy.properties
