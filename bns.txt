@@ -1,0 +1,27 @@
+import org.apache.jmeter.util.JMeterUtils
+
+def configFile = new File(
+    JMeterUtils.getJMeterBinDir(),
+    'proxy-user.properties'
+)
+
+def config = new Properties()
+configFile.withInputStream { config.load(it) }
+
+def filePath = config.getProperty('bnspolicynumber.path')?.trim()
+
+if (!filePath) {
+    throw new Exception("bnspolicynumber.path non renseigné")
+}
+
+log.info("Fichier BNS utilisé : ${filePath}")
+--------
+if (!file.isFile()) {
+    throw new Exception(
+        "Fichier BNS introuvable : ${file.absolutePath}"
+    )
+}
+
+file.withInputStream {
+    propsFile.load(it)
+}
