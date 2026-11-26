@@ -1,0 +1,340 @@
+# Mission — Rétrodocumentation SAP ABAP et production d'un document unifié de spécifications
+
+## 1. Objectif
+
+Produire et consolider les spécifications de l'application BRN à partir des sources SAP ABAP, d'un modèle documentaire officiel et des recommandations associées.
+
+**Le livrable principal doit être un document unique**, regroupant l'ensemble des chapitres fonctionnels, techniques, processus, règles métier, tableaux et diagrammes prévus par le modèle.
+
+Ne pas créer de documents fonctionnels et techniques séparés.
+
+L'objectif est de préserver le travail déjà réalisé, de réutiliser les informations existantes et de compléter uniquement les éléments manquants ou insuffisants.
+
+## 2. Sources obligatoires
+
+**Modèle officiel de document et table des matières :**
+
+`<CHEMIN_DU_TEMPLATE>`
+
+**Recommandations complémentaires :**
+
+`<CHEMIN_DES_RECOMMANDATIONS>`
+
+**Sources SAP ABAP :**
+
+`<CHEMIN_DES_SOURCES_ABAP>`
+
+**Documentation déjà produite :**
+
+`<CHEMIN_DE_LA_DOCUMENTATION_EXISTANTE>`
+
+Avant toute production, vérifier l'existence et la lisibilité des sources.
+
+La structure finale du document doit respecter exactement la table des matières officielle, notamment :
+
+- La hiérarchie des chapitres.
+- Les intitulés.
+- La numérotation.
+- L'ordre des sections.
+- Les exigences de présentation du modèle.
+
+Les recommandations doivent être intégrées dans les chapitres concernés, sans créer de nouvelles sections inutiles.
+
+## 3. Organisation des dossiers
+
+Privilégier l'arborescence suivante :
+
+```text
+BRN/
+├── input/
+│   ├── src/abap/
+│   ├── templates/
+│   ├── guidelines/
+│   └── docs/
+│
+└── output/
+    ├── specification-BRN.docx
+    ├── diagrams/
+    └── review/
+        ├── toc-mapping.md
+        ├── traceability.md
+        ├── open-questions.md
+        └── qa-report.md
+```
+
+### Règles d'organisation
+
+1. Ne pas créer plusieurs documents de spécifications.
+2. Ne pas créer de dossiers `functional/`, `technical/`, `deliverables/` ou de sous-dossiers de diagrammes par catégorie.
+3. Ne pas dupliquer le code source ABAP déjà accessible.
+4. Ne pas déplacer ou supprimer les livrables existants.
+5. Conserver les diagrammes dans les chapitres du document principal.
+6. Utiliser `output/diagrams/` uniquement pour les fichiers sources éditables des diagrammes.
+7. Utiliser `output/review/` uniquement pour les matrices, questions ouvertes et rapports de contrôle.
+8. Ne créer les dossiers nécessaires qu'après validation du plan.
+9. Adapter les noms et chemins si l'organisation existante offre déjà une structure équivalente.
+10. Ne pas produire plusieurs versions du document final sans demande explicite.
+
+Si le modèle est en DOCX, préserver autant que possible son format, ses styles, sa numérotation et sa mise en page.
+
+Si l'édition DOCX n'est pas techniquement possible dans l'environnement, le signaler avant de proposer un format intermédiaire.
+
+## 4. Préservation des travaux existants
+
+Ne supprimer aucun document.
+
+Ne modifier aucune source SAP ABAP.
+
+Ne pas régénérer intégralement les spécifications existantes lorsqu'elles sont déjà exploitables.
+
+Préserver les identifiants des règles métier, user stories, processus et scénarios de test.
+
+Ne pas inventer de comportement fonctionnel ou technique.
+
+Associer les informations importantes à leurs sources.
+
+Distinguer systématiquement :
+
+- **FAIT VÉRIFIÉ** : démontré par le code ou une source documentaire.
+- **DÉDUCTION** : interprétation fondée sur des éléments observables.
+- **HYPOTHÈSE** : information non démontrée.
+- **À CONFIRMER** : point nécessitant une validation.
+
+## 5. Phase A — Analyse préalable en lecture seule
+
+Avant de générer le document, analyser :
+
+### A.1. Le modèle officiel
+
+Lire intégralement le template et extraire sa table des matières.
+
+Identifier chaque chapitre, ses objectifs et les informations attendues.
+
+### A.2. Les recommandations
+
+Identifier les attentes concernant :
+
+- Les descriptions fonctionnelles.
+- Les spécifications techniques.
+- Les diagrammes de flux.
+- Les schémas de processus métier.
+- Les diagrammes de séquence.
+- L'architecture applicative.
+- Les tableaux et modèles de données.
+- La lisibilité et la présentation.
+
+Associer chaque recommandation à la section appropriée.
+
+### A.3. La documentation existante
+
+Inventorier les spécifications, règles métier, diagrammes et autres contenus disponibles.
+
+Rechercher leurs correspondances avec la table des matières.
+
+Identifier les informations réutilisables et les éléments manquants.
+
+### A.4. Les sources SAP ABAP
+
+Analyser les programmes, includes, classes, méthodes, modules fonctionnels, tables, dépendances, traitements batch, interfaces, contrôles et règles de calcul pertinents.
+
+Conserver les références aux sources techniques.
+
+Ne pas transformer une déduction technique en règle métier officiellement validée.
+
+## 6. Phase B — Matrice de correspondance
+
+Produire une matrice :
+
+| Section du modèle | Contenu existant | Source ABAP / documentaire | Recommandation | Action |
+|---|---|---|---|---|
+
+Utiliser les statuts :
+
+- CONSERVER
+- ENRICHIR
+- CRÉER
+- À REVOIR
+
+Identifier également les diagrammes nécessaires et les éventuelles contradictions.
+
+Préparer un plan de consolidation par chapitre.
+
+**Ne modifier aucun fichier à ce stade. Présenter la matrice et le plan, puis attendre ma validation.**
+
+## 7. Phase C — Production du document unifié
+
+Après validation, produire un seul document :
+
+`output/specification-BRN.docx`
+
+Respecter intégralement la table des matières officielle.
+
+Pour chaque chapitre :
+
+1. Reprendre le titre et la numérotation du modèle.
+2. Réutiliser les contenus existants pertinents.
+3. Analyser les sources ABAP nécessaires.
+4. Compléter les informations manquantes.
+5. Intégrer les tableaux utiles.
+6. Ajouter les diagrammes nécessaires dans le chapitre concerné.
+7. Vérifier la cohérence avec les autres sections.
+8. Contrôler les références aux sources.
+9. Signaler les questions ouvertes.
+10. Conserver la structure et la mise en forme du document.
+
+Les aspects fonctionnels et techniques doivent rester organisés **selon le modèle fourni**, et non selon une nouvelle structure inventée.
+
+Éviter les doublons entre chapitres ; utiliser des références croisées lorsque nécessaire.
+
+## 8. Génération et intégration des diagrammes
+
+Produire des diagrammes uniquement lorsque leur présence est justifiée par les recommandations ou les besoins de compréhension.
+
+Types possibles :
+
+- Diagrammes de processus métier.
+- Diagrammes de flux de données.
+- Diagrammes de séquence.
+- Architecture applicative.
+- Diagrammes d'états.
+- Modèles de données.
+
+Les diagrammes doivent être intégrés dans le document principal, à l'endroit pertinent.
+
+Conserver leurs sources éditables, si nécessaire, dans :
+
+`output/diagrams/`
+
+Utiliser des noms de fichiers explicites comme :
+
+- `process-calcul-commissions.mmd`
+- `sequence-validation-commissions.mmd`
+- `architecture-applicative.drawio`
+
+Privilégier Mermaid pour les flux et séquences, et draw.io lorsque des schémas d'architecture détaillés sont nécessaires.
+
+Ne pas installer de dépendances ou appeler de services externes non autorisés.
+
+Ne pas déclarer un diagramme valide sans avoir réellement vérifié son rendu.
+
+## 9. Traçabilité
+
+Maintenir la correspondance entre :
+
+**Sources ABAP et documentation → Règles métier → Processus → Chapitres des spécifications → Scénarios d'acceptation.**
+
+Conserver les identifiants existants.
+
+Utiliser `output/review/traceability.md` pour les correspondances qui nécessitent un suivi explicite.
+
+Ne pas répéter dans ce fichier le contenu intégral des spécifications.
+
+## 10. Validation qualité
+
+Après chaque chapitre, vérifier :
+
+- La conformité à la table des matières.
+- Le respect des recommandations.
+- La cohérence fonctionnelle et technique.
+- La traçabilité.
+- La lisibilité.
+- L'absence de duplication.
+- La qualité des diagrammes.
+- Le maintien des contenus existants.
+- Les contradictions et questions ouvertes.
+
+Si des scripts de validation sont nécessaires, privilégier Python 3 multiplateforme Windows/Linux, sans dépendances supplémentaires lorsque cela suffit.
+
+Conserver les résultats dans `output/review/qa-report.md`.
+
+Distinguer les validations effectivement exécutées des vérifications documentaires et des éléments non vérifiés.
+
+## 11. Gestion des itérations
+
+Travailler chapitre par chapitre.
+
+Lorsqu'une correction est demandée :
+
+- Modifier uniquement les sections concernées.
+- Vérifier les impacts sur les autres chapitres.
+- Ne pas régénérer tout le document.
+- Préserver les contenus déjà validés.
+- Réexaminer uniquement les diagrammes et références concernés.
+
+Après chaque chapitre, présenter une synthèse des modifications, des sources utilisées et des questions ouvertes.
+
+## 12. Livraison finale
+
+Le résultat attendu est :
+
+**Un document unique, complet et consolidé :**
+
+`output/specification-BRN.docx`
+
+Ce document contient tous les chapitres de la table des matières officielle, y compris les aspects fonctionnels et techniques, tableaux et diagrammes.
+
+Les seuls fichiers annexes sont :
+
+- Les sources éditables des diagrammes nécessaires.
+- Les matrices et rapports de vérification.
+- Les questions ouvertes et éléments de traçabilité.
+
+Ne pas générer de copies supplémentaires du document dans différents dossiers.
+
+## 13. Ordre d'exécution obligatoire
+
+**Étape 1 — Inventaire**
+
+Lire la table des matières, les recommandations, le code ABAP et les documents existants.
+
+**Étape 2 — Analyse d'impact**
+
+Identifier les contenus présents, incomplets et manquants.
+
+**Étape 3 — Plan de consolidation**
+
+Présenter la matrice de correspondance, les diagrammes attendus et les modifications proposées.
+
+**Étape 4 — Validation**
+
+Attendre mon accord explicite avant toute modification.
+
+**Étape 5 — Production incrémentale**
+
+Produire et enrichir le document unique, chapitre par chapitre.
+
+**Étape 6 — Contrôle**
+
+Vérifier la cohérence, la traçabilité, les diagrammes et les exigences du modèle.
+
+**Étape 7 — Livraison**
+
+Fournir le document final et les rapports strictement nécessaires.
+
+## 14. Instruction pour la première exécution
+
+Commence uniquement par les étapes 1 à 3.
+
+Ne modifie aucun fichier.
+
+Ne crée aucun dossier.
+
+Ne modifie pas les sources ABAP.
+
+Présente-moi :
+
+1. La table des matières exacte du modèle.
+2. La synthèse des recommandations.
+3. L'inventaire des contenus déjà produits.
+4. La matrice de correspondance.
+5. Les chapitres à conserver, enrichir, créer ou revoir.
+6. Les diagrammes recommandés et leur justification.
+7. L'organisation minimale des fichiers réellement nécessaire.
+8. Le plan de consolidation incrémental.
+9. Les points nécessitant une clarification.
+
+**Attends mon approbation avant de commencer la production.**
+
+Principe directeur :
+
+**Un seul document de spécifications, conforme au modèle officiel, enrichi à partir de la rétrodocumentation ABAP et des travaux existants, sans duplication ni régénération inutile.**
