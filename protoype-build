@@ -1,0 +1,82 @@
+
+---
+description: Build a complete interactive business prototype from existing specifications, with realistic mock data and configurable application language.
+agent: prototype-developer
+---
+
+# Prototype Build
+
+## Parameters
+
+- Application language: $1
+- Project name: $2
+
+If no language is provided, use the language of the existing specifications.
+If no project name is provided, detect it from the current workspace.
+
+Accept standard language codes such as fr, fr-FR, en, en-US, es, and de.
+
+## Mission
+
+Build a complete, interactive, and demonstrable business prototype using the project's existing unified specifications.
+
+Do not regenerate specifications or execute the full documentation pipeline.
+
+## Existing capabilities
+
+Use the following skills when available:
+
+- `prototype-app`: implement the application and business interactions.
+- `ux-mockup`: design missing screens and user journeys.
+- `journey-showcase`: implement end-to-end demonstration scenarios.
+- `qa-review`: validate the prototype and its business consistency.
+
+Use existing project assets and conventions whenever possible.
+
+## Application language
+
+All user-facing content must use the requested language:
+
+- Navigation and menus
+- Page titles and labels
+- Forms and validation messages
+- Buttons and notifications
+- Table headers and filters
+- Business statuses and workflows
+- Synthetic mock data displayed to users
+- Demonstration scenarios
+
+Use locale-appropriate dates, numbers, and currencies, while preserving the business rules defined in the specifications.
+
+Keep technical identifiers, filenames, and source code conventions in English.
+
+## Implementation requirements
+
+1. Read and understand the existing unified specifications.
+2. Identify screens, roles, workflows, entities, and business rules.
+3. Build a modern, responsive, fully navigable application.
+4. Implement functional forms, actions, filters, and navigation.
+5. Generate comprehensive, consistent synthetic mock data.
+6. Include realistic business scenarios, edge cases, errors, and histories.
+7. Ensure all screens share coherent data and relationships.
+8. Provide reproducible mock data generation and reset capabilities.
+9. Implement end-to-end demonstration journeys.
+10. Run available tests, review findings, and fix identified issues.
+
+Never use real production or personal data in the mock datasets.
+
+## Delivery
+
+Provide:
+- A working local prototype
+- Comprehensive synthetic datasets
+- Interactive business workflows
+- Demonstration scenarios
+- Automated tests
+- Clear startup instructions
+- A summary of implemented and missing features
+
+Keep the existing documentation unchanged.
+Do not deploy or publish externally.
+
+Start implementing the prototype using the existing specifications.
